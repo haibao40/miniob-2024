@@ -34,6 +34,8 @@ public:
   RC insert_entry(const char *record, const RID *rid) override;
   RC delete_entry(const char *record, const RID *rid) override;
 
+  RC destroy() override;
+
   /**
    * 扫描指定范围的数据
    */
