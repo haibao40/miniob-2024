@@ -88,6 +88,8 @@ public:
    */
   virtual RC sync() = 0;
 
+  virtual RC destroy() = 0;
+
 protected:
   RC init(const IndexMeta &index_meta, const FieldMeta &field_meta);
 
