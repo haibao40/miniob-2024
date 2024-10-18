@@ -33,6 +33,7 @@ RC ExpressionRewriter::rewrite(unique_ptr<LogicalOperator> &oper, bool &change_m
 
   vector<unique_ptr<Expression>> &expressions = oper->expressions();
   for (unique_ptr<Expression> &expr : expressions) {
+    // LOG_DEBUG("debug");
     rc = rewrite_expression(expr, sub_change_made);
     if (rc != RC::SUCCESS) {
       break;

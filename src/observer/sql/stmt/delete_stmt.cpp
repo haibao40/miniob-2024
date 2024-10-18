@@ -36,6 +36,7 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
     return RC::INVALID_ARGUMENT;
   }
 
+  
   // check whether the table exists
   Table *table = db->find_table(table_name);
   if (nullptr == table) {

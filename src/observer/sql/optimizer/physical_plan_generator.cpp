@@ -28,6 +28,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/index_scan_physical_operator.h"
 #include "sql/operator/insert_logical_operator.h"
 #include "sql/operator/insert_physical_operator.h"
+#include "sql/operator/update_logical_operator.h"
+#include "sql/operator/update_physical_operator.h"
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/join_physical_operator.h"
 #include "sql/operator/predicate_logical_operator.h"
@@ -73,6 +75,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
 
     case LogicalOperatorType::DELETE: {
       return create_plan(static_cast<DeleteLogicalOperator &>(logical_operator), oper);
+    } break;
+
+    case LogicalOperatorType::UPDATE: {
+      return create_plan(static_cast<UpdateLogicalOperator &>(logical_operator), oper);
     } break;
 
     case LogicalOperatorType::EXPLAIN: {
@@ -247,9 +253,55 @@ RC PhysicalPlanGenerator::create_plan(InsertLogicalOperator &insert_oper, unique
 {
   Table                  *table           = insert_oper.table();
   vector<Value>          &values          = insert_oper.values();
+  LOG_DEBUG("tname:%s, tvalue:%d", table->name(), values.front().get_int());
   InsertPhysicalOperator *insert_phy_oper = new InsertPhysicalOperator(table, std::move(values));
   oper.reset(insert_phy_oper);
   return RC::SUCCESS;
+}
+
+RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique_ptr<PhysicalOperator> &oper)
+{
+  vector<unique_ptr<LogicalOperator>> &child_opers = update_oper.children();
+
+  Table                  *table           = update_oper.table();
+  Value          &value          = update_oper.value();
+
+  unique_ptr<PhysicalOperator> child_physical_oper;
+
+  RC rc = RC::SUCCESS;
+  // if (!child_opers.empty()) {
+  //   LogicalOperator *child_oper = child_opers.front().get();
+
+  //   rc = create(*child_oper, child_physical_oper);
+  //   if (rc != RC::SUCCESS) {
+  //     LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
+  //     return rc;
+  //   }
+  // }
+  
+  // if (child_physical_oper) {
+  //   oper->add_child(std::move(child_physical_oper));
+  // }
+  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, std::move(value)));
+  for(std::size_t i = 0; i < child_opers.size(); i++){
+    LogicalOperator *child_oper = child_opers[i].get();
+    child_physical_oper = nullptr;
+    
+    rc = create(*child_oper, child_physical_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (child_physical_oper) {
+      oper->add_child(std::move(child_physical_oper));
+    }
+  }
+
+  // UpdatePhysicalOperator *update_phy_oper = new UpdatePhysicalOperator(table, std::move(value));
+  //update_phy_oper->close();
+  // oper.reset(update_phy_oper);
+  return rc;
 }
 
 RC PhysicalPlanGenerator::create_plan(DeleteLogicalOperator &delete_oper, unique_ptr<PhysicalOperator> &oper)
@@ -263,7 +315,7 @@ RC PhysicalPlanGenerator::create_plan(DeleteLogicalOperator &delete_oper, unique
     LogicalOperator *child_oper = child_opers.front().get();
 
     rc = create(*child_oper, child_physical_oper);
-    if (rc != RC::SUCCESS) {
+    if (rc != RC::SUCCESS) { 
       LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
       return rc;
     }

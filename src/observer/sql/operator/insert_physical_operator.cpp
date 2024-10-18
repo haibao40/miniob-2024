@@ -25,6 +25,8 @@ InsertPhysicalOperator::InsertPhysicalOperator(Table *table, vector<Value> &&val
 
 RC InsertPhysicalOperator::open(Trx *trx)
 {
+  LOG_DEBUG("tablename:%s valuessize:%d",table_->name(), values_.size());
+
   Record record;
   RC     rc = table_->make_record(static_cast<int>(values_.size()), values_.data(), record);
   if (rc != RC::SUCCESS) {

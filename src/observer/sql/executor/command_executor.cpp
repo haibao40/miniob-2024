@@ -88,6 +88,11 @@ RC CommandExecutor::execute(SQLStageEvent *sql_event)
       rc = RC::SUCCESS;
     } break;
 
+    // case StmtType::UPDATE:{
+    //   UpdateExecutor executor;
+    //   rc = executor.execute(sql_event);
+    // }
+
     default: {
       LOG_ERROR("unknown command: %d", static_cast<int>(stmt->type()));
       rc = RC::UNIMPLEMENTED;
