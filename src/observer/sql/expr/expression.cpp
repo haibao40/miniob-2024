@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include <stack>
 
 using namespace std;
 
@@ -142,6 +143,9 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     case GREAT_THAN: {
       result = (cmp_result > 0);
     } break;
+    case LIKE_TO:{
+      rc = like_value(left, right,result);
+    }break;
     default: {
       LOG_WARN("unsupported comparison. %d", comp_);
       rc = RC::INTERNAL;
@@ -151,6 +155,64 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
   return rc;
 }
 
+RC ComparisonExpr::like_value(const Value &left, const Value &right, bool &result) const{
+  RC  rc         = RC::SUCCESS;
+  //判断左右操作数的类型，必须是两个字符串类型，result随便设置一个值吧，反正也不会
+  if(left.attr_type() == AttrType::CHARS && right.attr_type() == AttrType::CHARS){
+    string left_data = left.get_string();
+    string right_data = right.get_string();
+     int  left_idx = 0, right_idx = 0;
+     std::stack<int> percent_stack;
+             result = true;  // 默认设置为成功
+
+        while (right_idx < right_data.size()) {
+            if (right_data[right_idx] == '%') {
+                percent_stack.push(left_idx);
+                right_idx++;
+            } else if (right_data[right_idx] == '_') {
+                if (left_idx < left_data.size() && left_data[left_idx] != '\'') {
+                    left_idx++;
+                    right_idx++;
+                } else {
+                    if (!percent_stack.empty()) {
+                        left_idx = percent_stack.top() + 1;
+                        percent_stack.pop();
+                    } else {
+                        result = false;
+                        break;  // 匹配失败，跳出循环
+                    }
+                }
+            } else {
+                if (left_idx < left_data.size() && left_data[left_idx] == right_data[right_idx] && left_data[left_idx] != '\'') {
+                    left_idx++;
+                    right_idx++;
+                } else {
+                    if (!percent_stack.empty()) {
+                        left_idx = percent_stack.top() + 1;
+                        percent_stack.pop();
+                    } else {
+                        result = false;
+                        break;  // 匹配失败，跳出循环
+                    }
+                }
+            }
+        }
+
+        while (!percent_stack.empty()) {
+            left_idx = percent_stack.top() + 1;
+            percent_stack.pop();
+        }
+
+        if (left_idx != left_data.size()) {
+            result = false;
+        }
+
+        return RC::SUCCESS;
+  }else{
+    result = false ;
+  }
+  return rc;
+}
 RC ComparisonExpr::try_get_value(Value &cell) const
 {
   if (left_->type() == ExprType::VALUE && right_->type() == ExprType::VALUE) {
