@@ -19,8 +19,8 @@ See the Mulan PSL v2 for more details. */
 
 using namespace std;
 
-UpdatePhysicalOperator::UpdatePhysicalOperator(Table *table, Value &&value)
-    : table_(table), value_(std::move(value))
+UpdatePhysicalOperator::UpdatePhysicalOperator(Table *table, const char* field_name, Value &&value)
+    : table_(table), field_name_(field_name), value_(std::move(value))
 {}
 
 RC UpdatePhysicalOperator::open(Trx *trx)
@@ -37,39 +37,44 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return rc;
   }
 
-  std::size_t i = 1;
-  while(i < children_.size()){
-    std::unique_ptr<PhysicalOperator> &child1 = children_[i++];
-    rc = child1->open(trx);
-    if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to open child operator: %s", strrc(rc));
-    return rc;
-    }
-    child1->close();
-
-  }
-
   trx_ = trx;
 
-  // while (OB_SUCC(rc = child->next())) {
-  //   Tuple *tuple = child->current_tuple();
-  //   if (nullptr == tuple) {
-  //     LOG_WARN("failed to get current record: %s", strrc(rc));
-  //     return rc;
-  //   }
+  while (OB_SUCC(rc = child->next())) {
+    Tuple *tuple = child->current_tuple();
+    if (nullptr == tuple) {
+      LOG_WARN("failed to get current record: %s", strrc(rc));
+      return rc;
+    }
 
-  //   RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-  //   Record   &record    = row_tuple->record();
-  //   records_.emplace_back(std::move(record));
-  // }
+    Value valuetmp;
+    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+    TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
+    rc = row_tuple->find_cell(tuplecellspec, valuetmp);
+    if(rc != RC::SUCCESS ){
+      LOG_WARN("not find");
+      return rc;
+    }
+    if(valuetmp.attr_type() != value_.attr_type()){
+      LOG_WARN("type is not right");
+      return RC::NOT_EXIST;
+    }
+    Record   &record    = row_tuple->record();
+    records_.emplace_back(std::move(record));
+  }
 
   child->close();
+  // 先收集记录再更新
+  // 记录的有效性由事务来保证，如果事务不保证更新的有效性，那说明此事务类型不支持并发控制，比如VacuousTrx
+  LOG_DEBUG("field_name:%s, value:%s", field_name_.c_str(), value_.to_string().c_str());
+  for (Record &record : records_) {
+    rc = trx_->update_record(table_, record, field_name_.c_str(), value_);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to delete record: %s", strrc(rc));
+      return rc;
+    }
+  }
 
   return RC::SUCCESS;
-  
-  // RC rc = RC::INTERNAL;
-  // Record record;
-  // return rc;
 }
 
 RC UpdatePhysicalOperator::next() { return RC::RECORD_EOF; }

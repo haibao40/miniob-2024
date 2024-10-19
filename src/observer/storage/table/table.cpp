@@ -220,6 +220,33 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   return rc;
 }
 
+RC Table::update_record(Record &record, const char* field_name, const Value &value){
+  RC rc = RC::SUCCESS;
+  // LOG_DEBUG("type:%d, value:%s, field_name:%s", value.attr_type(), value.to_string().c_str(), field_name);
+
+  Record new_record;
+  int   record_size = table_meta_.record_size();
+  char *record_data = (char *)malloc(record_size);
+  const int normal_field_start_index = table_meta_.sys_field_num();
+  const FieldMeta *field = table_meta_.field(normal_field_start_index);
+  int offset = field->offset();
+
+  memcpy(record_data, record.data() + offset, record_size);
+  new_record.set_data_owner(record_data, record_size);
+  
+  rc = set_value_to_record(record_data, value, table_meta_.field(field_name));
+  rc = insert_record(new_record);
+  
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to insert record. table name:%s", table_meta_.name());
+    free(record_data);
+    return rc;
+  }
+
+  delete_record(record);
+  return rc;
+}
+
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
@@ -333,6 +360,10 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
 RC Table::set_value_to_record(char *record_data, const Value &value, const FieldMeta *field)
 {
+  if(field == nullptr){
+    LOG_WARN("filed is empty");
+    return RC::EMPTY;
+  }
   size_t       copy_len = field->len();
   const size_t data_len = value.length();
   if (field->type() == AttrType::CHARS) {
@@ -340,7 +371,9 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
       copy_len = data_len + 1;
     }
   }
+ 
   memcpy(record_data + field->offset(), value.data(), copy_len);
+  
   return RC::SUCCESS;
 }
 

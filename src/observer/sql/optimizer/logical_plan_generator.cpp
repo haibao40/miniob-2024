@@ -248,16 +248,16 @@ RC LogicalPlanGenerator::create_plan(InsertStmt *insert_stmt, unique_ptr<Logical
 RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   Table         *table       = update_stmt->table();
+  const char  *field_name = update_stmt->Attr_name().c_str();
   FilterStmt    *filter_stmt  = update_stmt->filter_stmt();
   Value value = (update_stmt->value());
   
-  LOG_DEBUG("update data: %d", update_stmt->value().get_int());
+  // LOG_DEBUG("update data: %d, field_name:%s", update_stmt->value().get_int(), field_name);
   // if(update_stmt->value()->attr_type() )
   
   // vector<Value> values(update_stmt->value(), update_stmt->value() + 1);
   vector<Value> values;
   values.push_back(value);
-  LOG_DEBUG("single:%d, vector%d", (value).get_int(), values[0].get_int());
 
   unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
   unique_ptr<LogicalOperator> predicate_oper;
@@ -267,19 +267,22 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     return rc;
   }
 
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, value));
-  unique_ptr<LogicalOperator> delete_oper(new DeleteLogicalOperator(table));
-  unique_ptr<LogicalOperator> insert_oper(new InsertLogicalOperator(table, values));
+
+  LOG_DEBUG("debug");
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, field_name, value));
+  LOG_DEBUG("debug");
+  // unique_ptr<LogicalOperator> delete_oper(new DeleteLogicalOperator(table));
+  // unique_ptr<LogicalOperator> insert_oper(new InsertLogicalOperator(table, values));
  
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));
-    delete_oper->add_child(std::move(predicate_oper)); 
+    update_oper->add_child(std::move(predicate_oper)); 
   } else {
-    delete_oper->add_child(std::move(table_get_oper));
+    update_oper->add_child(std::move(table_get_oper));
   }
 
-  update_oper->add_child(std::move(delete_oper));
-  update_oper->add_child(std::move(insert_oper));
+  // update_oper->add_child(std::move(delete_oper));
+  // update_oper->add_child(std::move(insert_oper));
 
   // logical_operator.reset(update_operator);
   logical_operator = std::move(update_oper);

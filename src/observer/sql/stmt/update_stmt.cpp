@@ -19,8 +19,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include <vector>
 
-UpdateStmt::UpdateStmt(Table *table, const Value value, int value_amount, FilterStmt *filter_stmt)
-    : table_(table), value_(value), value_amount_(value_amount), filter_stmt_(filter_stmt)
+UpdateStmt::UpdateStmt(Table *table, const char* attribute_name ,const Value value, int value_amount, FilterStmt *filter_stmt)
+    : table_(table), attribute_name_(attribute_name), value_(value), value_amount_(value_amount), filter_stmt_(filter_stmt)
 {}
 
 //UpdateSqlNode 结构
@@ -34,6 +34,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   // stmt = nullptr;
   // return RC::INTERNAL;
   const char *table_name = update.relation_name.c_str();
+  const char *attribute_name = update.attribute_name.c_str();
   
   if (nullptr == db || nullptr == table_name || update.attribute_name.empty() || update.value.attr_type() == AttrType::UNDEFINED) {
     LOG_WARN("invalid argument. db=%p, table_name=%p, attribute_name=%p, attrtype=%p",
@@ -62,11 +63,9 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
     return rc;
   }
-  
-  LOG_DEBUG("value = %d", (value).get_int());
 
   const Value value1 = update.value;
-  stmt = new UpdateStmt(table, value1, value_num, filter_stmt);
+  stmt = new UpdateStmt(table, attribute_name, value1, value_num, filter_stmt);
   
   return RC::SUCCESS;
   // return RC::INTERNAL;
