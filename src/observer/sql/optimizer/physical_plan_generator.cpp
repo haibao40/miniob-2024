@@ -267,6 +267,7 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
   const char* field_name         = update_oper.field_name().c_str();
 
   unique_ptr<PhysicalOperator> child_physical_oper;
+  unique_ptr<PhysicalOperator> child_physical_oper1;
 
   RC rc = RC::SUCCESS;
   if (!child_opers.empty()) {
@@ -277,11 +278,21 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
       LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
       return rc;
     }
+    LogicalOperator *child_oper1 = child_opers[1].get();
+
+    rc = create(*child_oper1, child_physical_oper1);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
   }
 
   oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, field_name,::move(value)));
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));
+  }
+  if (child_physical_oper1) {
+    oper->add_child(std::move(child_physical_oper1));
   }
   return rc;
 }
