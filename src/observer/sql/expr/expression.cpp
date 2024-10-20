@@ -155,59 +155,165 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
   return rc;
 }
 
+#include <iostream>
+#include <string>
+#include <vector>
+
+bool is_match3(const std::string &left_data, const std::string &right_data) {
+    int m = left_data.size();
+    int n = right_data.size();
+
+    // 创建 dp 数组
+    std::vector<std::vector<bool> > dp(m + 1, std::vector<bool>(n + 1, false));
+    dp[0][0] = true;
+
+    // 初始化 dp[0][j]
+    for (int j = 1; j <= n; ++j) {
+        if (right_data[j - 1] == '%') {
+            dp[0][j] = dp[0][j - 1];
+        } else {
+            break;
+        }
+    }
+
+    // 填充 dp 数组
+    for (int i = 1; i <= m; ++i) {
+        for (int j = 1; j <= n; ++j) {
+            if (right_data[j - 1] == '%') {
+                dp[i][j] = dp[i][j - 1] || dp[i - 1][j];
+            } else if (right_data[j - 1] == '_' || (left_data[i - 1] != '\'' && left_data[i - 1] == right_data[j - 1])) {
+                dp[i][j] = dp[i - 1][j - 1];
+            }
+        }
+    }
+
+    return dp[m][n];
+}
+
+// bool isMatch2(const std::string& left_data, const std::string& right_data) {  
+//     int i = 0, j = 0;  
+//     int m = left_data.size(), n = right_data.size();  
+  
+//     while (i < m && j < n) {  
+//         if (left_data[i] == '%' && (i + 1 < m && left_data[i + 1] == '%')) {  
+//             // Handle escaped %% which matches a single %  
+//             if (j < n && right_data[j] == '%') {  
+//                 ++i; // Skip the escaped % in left_data  
+//                 ++j; // Move to the next character in right_data  
+//             } else {  
+//                 // Start matching %* (zero or more characters)  
+//                 ++i; // Skip the initial % in left_data  
+  
+//                 // Try to match as much as possible with %*  
+//                 while (j < n && right_data[j] != '\'' &&  
+//                        (!(i < m && left_data[i] == '_' || left_data[i] == '%'))) {  
+//                     ++j;  
+//                 }  
+  
+//                 // If we hit another pattern or end of string in left_data, backtrack  
+//                 if (i < m && (left_data[i] == '_' || left_data[i] == '%')) {  
+//                     // Check if there's a way to continue matching  
+//                     bool matchFound = false;  
+//                     for (int k = j; k <= n; ++k) {  
+//                         if (isMatch2(left_data.substr(i + 1), right_data.substr(k))) {  
+//                             matchFound = true;  
+//                             j = k; // Update j to the position where the substring match ended  
+//                             break;  
+//                         }  
+//                     }  
+//                     if (!matchFound) {  
+//                         return false;  
+//                     }  
+//                 } else {  
+//                     // No more patterns in left_data, just check if we've matched the entire right_data  
+//                     if (j == n) {  
+//                         return true;  
+//                     } else if (i == m) {  
+//                         return false;  
+//                     }  
+//                 }  
+//             }  
+//         } else if (left_data[i] == '_' || left_data[i] == right_data[j] ||  
+//                    (left_data[i] == '%' && !(right_data[j] == '\''))) {  
+//             // Match single character or _ matches any single character  
+//             ++i;  
+//             ++j;  
+//         } else {  
+//             // No match found  
+//             return false;  
+//         }  
+//     }  
+  
+//     // Check if we've matched all characters in both strings  
+//     return i == m && j == n;  
+// }  
+// bool isMatch(const std::string& left_data, const std::string& right_data) {  
+//     int i = 0, j = 0;  
+//     int m = left_data.size(), n = right_data.size();  
+  
+//     while (i < m && j < n) {  
+//         if (left_data[i] == '%' && (i + 1 < m && left_data[i + 1] == '%')) {  
+//             // Handle escaped %% which matches a single %  
+//             if (j < n && right_data[j] == '%') {  
+//                 ++i; // Skip the escaped % in left_data  
+//                 ++j; // Move to the next character in right_data  
+//             } else {  
+//                 // Start matching %* (zero or more characters)  
+//                 ++i; // Skip the initial % in left_data  
+  
+//                 // Try to match as much as possible with %*  
+//                 while (j < n && right_data[j] != '\'' &&  
+//                        (!(i < m && left_data[i] == '_' || left_data[i] == '%'))) {  
+//                     ++j;  
+//                 }  
+  
+//                 // If we hit another pattern or end of string in left_data, backtrack  
+//                 if (i < m && (left_data[i] == '_' || left_data[i] == '%')) {  
+//                     // Check if there's a way to continue matching  
+//                     bool matchFound = false;  
+//                     for (int k = j; k <= n; ++k) {  
+//                         if (isMatch(left_data.substr(i + 1), right_data.substr(k))) {  
+//                             matchFound = true;  
+//                             j = k; // Update j to the position where the substring match ended  
+//                             break;  
+//                         }  
+//                     }  
+//                     if (!matchFound) {  
+//                         return false;  
+//                     }  
+//                 } else {  
+//                     // No more patterns in left_data, just check if we've matched the entire right_data  
+//                     if (j == n) {  
+//                         return true;  
+//                     } else if (i == m) {  
+//                         return false;  
+//                     }  
+//                 }  
+//             }  
+//         } else if (left_data[i] == '_' || left_data[i] == right_data[j] ||  
+//                    (left_data[i] == '%' && !(right_data[j] == '\''))) {  
+//             // Match single character or _ matches any single character  
+//             ++i;  
+//             ++j;  
+//         } else {  
+//             // No match found  
+//             return false;  
+//         }  
+//     }  
+  
+//     // Check if we've matched all characters in both strings  
+//     return i == m && j == n;  
+// }  
+
 RC ComparisonExpr::like_value(const Value &left, const Value &right, bool &result) const{
   RC  rc         = RC::SUCCESS;
   //判断左右操作数的类型，必须是两个字符串类型，result随便设置一个值吧，反正也不会
   if(left.attr_type() == AttrType::CHARS && right.attr_type() == AttrType::CHARS){
     string left_data = left.get_string();
     string right_data = right.get_string();
-     int  left_idx = 0, right_idx = 0;
-     std::stack<int> percent_stack;
-             result = true;  // 默认设置为成功
-
-        while (right_idx < right_data.size()) {
-            if (right_data[right_idx] == '%') {
-                percent_stack.push(left_idx);
-                right_idx++;
-            } else if (right_data[right_idx] == '_') {
-                if (left_idx < left_data.size() && left_data[left_idx] != '\'') {
-                    left_idx++;
-                    right_idx++;
-                } else {
-                    if (!percent_stack.empty()) {
-                        left_idx = percent_stack.top() + 1;
-                        percent_stack.pop();
-                    } else {
-                        result = false;
-                        break;  // 匹配失败，跳出循环
-                    }
-                }
-            } else {
-                if (left_idx < left_data.size() && left_data[left_idx] == right_data[right_idx] && left_data[left_idx] != '\'') {
-                    left_idx++;
-                    right_idx++;
-                } else {
-                    if (!percent_stack.empty()) {
-                        left_idx = percent_stack.top() + 1;
-                        percent_stack.pop();
-                    } else {
-                        result = false;
-                        break;  // 匹配失败，跳出循环
-                    }
-                }
-            }
-        }
-
-        while (!percent_stack.empty()) {
-            left_idx = percent_stack.top() + 1;
-            percent_stack.pop();
-        }
-
-        if (left_idx != left_data.size()) {
-            result = false;
-        }
-
-        return RC::SUCCESS;
+    //result = isMatch2(left_data, right_data);
+    result = is_match3(left_data,right_data);
+    return RC::SUCCESS;
   }else{
     result = false ;
   }
