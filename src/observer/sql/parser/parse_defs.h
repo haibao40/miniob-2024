@@ -52,6 +52,7 @@ enum CompOp
   GREAT_EQUAL,  ///< ">="
   GREAT_THAN, ///< ">"
   LIKE_TO,   //不能加在NO_OP后面 否则报错 filter_stmt.cpp 文件的88行，当然也不能写在equal_to前面
+  NOT_LIKE_TO,
   NO_OP,
   
 };
