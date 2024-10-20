@@ -15,9 +15,13 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "common/rc.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
+#include "sql/stmt/filter_stmt.h"
+#include <iostream>
 
 class Table;
+class FilterStmt;
 
 /**
  * @brief 更新语句
@@ -27,18 +31,24 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, Value *values, int value_amount);
+  UpdateStmt(Table *table, const char* attribute_name, const Value value, int value_amount, FilterStmt *filter_stmt);
+
+  StmtType type() const override { return StmtType::UPDATE; }
 
 public:
   static RC create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt);
 
 public:
   Table *table() const { return table_; }
-  Value *values() const { return values_; }
+  const Value value() const { return value_; }
   int    value_amount() const { return value_amount_; }
+  const std::string &Attr_name() const {return attribute_name_;}
+  FilterStmt *filter_stmt() const {return filter_stmt_;}
 
 private:
   Table *table_        = nullptr;
-  Value *values_       = nullptr;
+  std::string attribute_name_ = "";
+  const Value value_       = Value(0);
   int    value_amount_ = 0;
+  FilterStmt *filter_stmt_ = nullptr;
 };
