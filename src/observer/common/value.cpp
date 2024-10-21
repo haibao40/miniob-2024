@@ -125,6 +125,10 @@ void Value::set_data(char *data, int length)
       value_.bool_value_ = *(int *)data != 0;
       length_            = length;
     } break;
+    case AttrType::DATES: {
+      value_.int_value_  = *(int *)data;
+      length_            = length;
+    } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -173,6 +177,16 @@ void Value::set_string(const char *s, int len /*= 0*/)
     memcpy(value_.pointer_value_, s, len);
     value_.pointer_value_[len] = '\0';
   }
+}
+
+void Value::set_date(int year, int month, int day)
+{
+  reset();
+  // 将年月日一起组合成8位整数
+  int date_value = (year * 10000) + (month * 100) + day;
+  attr_type_ = AttrType::DATES;
+  value_.int_value_ = date_value;  //这里的date使用的是int存储
+  length_ = sizeof(date_value);
 }
 
 void Value::set_value(const Value &value)
