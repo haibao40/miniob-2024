@@ -36,7 +36,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
                                              const char *sql_string,
                                              YYLTYPE *llocp)
 {
-  ArithmeticExpr *expr = new ArithmeticExpr(type, left, right);
+  Value value(0);
+  ValueExpr *zero = new ValueExpr(value);
+  ArithmeticExpr *expr = type == ArithmeticExpr::Type::NEGATIVE ? new ArithmeticExpr(ArithmeticExpr::Type::SUB, zero, left) : new ArithmeticExpr(type, left, right);
   expr->set_name(token_name(sql_string, llocp));
   return expr;
 }
@@ -184,9 +186,12 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
-%left '+' '-'
-%left '*' '/'
-%nonassoc UMINUS
+
+
+%left '+' '-'    // 双目加法和减法的优先级
+%left '*' '/'    // 乘法和除法的优先级，高于加法和减法
+%nonassoc UMINUS    // 单目加法和减法的优先级，高于乘法和除法，但低于双目加法和减法
+
 %%
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
@@ -649,6 +654,59 @@ condition:
 
       delete $1;
       delete $3;
+    }
+    | expression comp_op value
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_expr = 1;
+      $$->left_expr = $1;
+      $$->right_is_attr = 0;
+      $$->right_value = *$3;
+      $$->comp = $2;
+
+      delete $3;
+    }
+    | value comp_op expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_expr = 1;
+      $$->right_expr = $3;
+      $$->comp = $2;
+
+      delete $1;
+    }
+    | expression comp_op rel_attr
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_expr = 1;
+      $$->left_expr = $1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $3;
+    }
+    | rel_attr comp_op expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_expr = 1;
+      $$->right_expr = $3;
+      $$->comp = $2;
+
+      delete $1;
+    }
+    | expression comp_op expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_expr = 1;
+      $$->left_expr = $1;
+      $$->right_is_expr = 1;
+      $$->right_expr = $3;
+      $$->comp = $2;
     }
     ;
     

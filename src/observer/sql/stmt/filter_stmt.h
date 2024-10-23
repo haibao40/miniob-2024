@@ -14,21 +14,24 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
-#include "sql/expr/expression.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/expr/expression.h"
 #include "sql/stmt/stmt.h"
 #include <unordered_map>
 #include <vector>
 
 class Db;
 class Table;
+class Field;
 class FieldMeta;
 
 struct FilterObj
 {
+  bool  is_expr=false;
   bool  is_attr;
   Field field;
   Value value;
+  std::unique_ptr<Expression> expr;
 
   void init_attr(const Field &field)
   {
@@ -40,6 +43,36 @@ struct FilterObj
   {
     is_attr     = false;
     this->value = value;
+  }
+
+  FilterObj(){}
+  FilterObj(Expression *expr) : expr(expr){
+    is_expr=true;
+  }
+
+  // void init_expr(ValueExpr *expr){
+  //   is_expr = true;
+  //   this->expr = std::make_unique<ValueExpr>(std::move(*expr));
+  // }
+
+  // void init_expr(ArithmeticExpr *expr){
+  //   is_expr = true;
+  //   this->expr = std::make_unique<ArithmeticExpr>(expr);
+  // }
+
+  // void init_expr(Expression *expr){
+  //   Value value(0);
+  //   ValueExpr *valexpr = new ValueExpr(value);
+  //   ArithmeticExpr *arithexpr = new ArithmeticExpr(ArithmeticExpr::Type::ADD, valexpr, expr);
+  //   is_expr = true;
+  //   this->expr = std::make_unique<ArithmeticExpr>(arithexpr);
+  //   // this->expr = std::move(*expr);
+  //   //delete expr;
+  // }
+
+  void init_expr(std::unique_ptr<Expression> &&expr){
+    is_expr = true;
+    this->expr = std::move(expr);
   }
 };
 
@@ -53,11 +86,33 @@ public:
 
   CompOp comp() const { return comp_; }
 
-  void set_left(const FilterObj &obj) { left_ = obj; }
-  void set_right(const FilterObj &obj) { right_ = obj; }
-
+  // void set_left(const FilterObj &obj) { left_ = obj; }
+  // void set_right(const FilterObj &obj) { right_ = obj; }
+  void set_left(FilterObj &&obj) { 
+    left_.is_attr = obj.is_attr;
+    left_.is_expr = obj.is_expr;
+    if(left_.is_expr){
+      left_.init_expr(std::move(obj.expr));
+    } else if(left_.is_attr){
+      left_.init_attr(obj.field);
+    }
+  }
+  void set_right(FilterObj &&obj) { 
+    right_.is_attr = obj.is_attr;
+    right_.is_expr = obj.is_expr;
+    right_.expr = std::move(obj.expr);  
+    if(right_.is_expr){
+      right_.init_expr(std::move(obj.expr));
+    } else if(right_.is_attr){
+      right_.init_attr(obj.field);
+    }
+  }
+  void set_left(std::unique_ptr<Expression> &&expr){ left_.init_expr(std::move(expr));}
+  void set_right(std::unique_ptr<Expression> &&expr){ right_.init_expr(std::move(expr));}
   const FilterObj &left() const { return left_; }
   const FilterObj &right() const { return right_; }
+  FilterObj &left() {return left_;}
+  FilterObj &right() {return right_;}
 
 private:
   CompOp    comp_ = NO_OP;
@@ -77,6 +132,7 @@ public:
 
 public:
   const std::vector<FilterUnit *> &filter_units() const { return filter_units_; }
+  std::vector<FilterUnit *> filter_units() {return filter_units_;}
 
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
