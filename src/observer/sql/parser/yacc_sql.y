@@ -36,6 +36,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
                                              const char *sql_string,
                                              YYLTYPE *llocp)
 {
+  printf("Type: ");
   Value value(0);
   ValueExpr *zero = new ValueExpr(value);
   ArithmeticExpr *expr = type == ArithmeticExpr::Type::NEGATIVE ? new ArithmeticExpr(ArithmeticExpr::Type::SUB, zero, left) : new ArithmeticExpr(type, left, right);
@@ -116,7 +117,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NE
         NOT
         LIKE
-        
+        MAX
+        MIN
+        AVG
+        SUM
+        COUNT        
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -507,7 +512,11 @@ expression_list:
     }
     ;
 expression:
-    expression '+' expression {
+    expression '-' value {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, new ValueExpr(*$3), sql_string, &@$);
+      delete $3;
+    }
+    | expression '+' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
     }
     | expression '-' expression {
@@ -523,7 +532,7 @@ expression:
       $$ = $2;
       $$->set_name(token_name(sql_string, &@$));
     }
-    | '-' expression %prec UMINUS {
+    | '-' expression  {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
     }
     | value {
