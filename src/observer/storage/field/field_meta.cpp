@@ -135,6 +135,11 @@ RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
     LOG_ERROR("not_null field is not a bool value. json value=%s", not_null_val.toStyledString().c_str());
     return RC::INTERNAL;
   }
+  //TODO:由于暂时没有在存储层实现not_null，先暂时不检查
+  // if (!not_null_val.isBool()) {
+  //   LOG_ERROR("not_null field is not a bool value. json value=%s", not_null_val.toStyledString().c_str());
+  //   return RC::INTERNAL;
+  // }
 
   AttrType type = attr_type_from_string(type_value.asCString());
   if (AttrType::UNDEFINED == type) {
@@ -147,6 +152,10 @@ RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
   int         len     = len_value.asInt();
   bool        visible = visible_value.asBool();
   int         field_id  = field_id_value.asInt();
-  bool        not_null = not_null_val.asBool();
+  bool        not_null = false;
+  //TODO:由于暂时没有在存储层实现not_null，如果没有，就不赋值，默认为false
+  if(not_null_val.isBool()) {
+    not_null = not_null_val.asBool();
+  }
   return field.init(name, type, offset, len, visible, field_id, not_null);
 }
