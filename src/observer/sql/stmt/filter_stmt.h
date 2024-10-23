@@ -95,6 +95,8 @@ public:
       left_.init_expr(std::move(obj.expr));
     } else if(left_.is_attr){
       left_.init_attr(obj.field);
+    } else{
+      left_.init_value(obj.value);
     }
   }
   void set_right(FilterObj &&obj) { 
@@ -105,6 +107,8 @@ public:
       right_.init_expr(std::move(obj.expr));
     } else if(right_.is_attr){
       right_.init_attr(obj.field);
+    } else{
+      right_.init_value(obj.value);
     }
   }
   void set_left(std::unique_ptr<Expression> &&expr){ left_.init_expr(std::move(expr));}
