@@ -189,6 +189,11 @@ void Value::set_date(int year, int month, int day)
   length_ = sizeof(date_value);
 }
 
+void Value::set_null()
+{
+  reset();
+}
+
 void Value::set_value(const Value &value)
 {
   switch (value.attr_type_) {

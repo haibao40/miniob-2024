@@ -35,6 +35,7 @@ public:
   friend class BooleanType;
   friend class CharType;
   friend class VectorType;
+  friend class NullType;
 
   Value() = default;
 
@@ -119,6 +120,11 @@ private:
    *@brief 设置日期，将日期字符串转换为一个8位的整数，从高位到低位，分别是，4位年份，2位月份，2位日期
    */
   void set_date(int year, int month, int day);
+
+  /***
+   * @brief 将value 设置为NULL类型的数据
+   */
+  void set_null();
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;

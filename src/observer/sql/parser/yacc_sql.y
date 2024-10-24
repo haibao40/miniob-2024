@@ -114,6 +114,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NE
         NOT
         LIKE
+        IS_     //后面加上_,用以区分枚举值IS
         NULL_T
         
 
@@ -422,6 +423,11 @@ value:
       free(tmp);
       free($1);
     }
+    | NULL_T {
+      $$ = new Value();
+      $$->reset();
+      $$->set_type(AttrType::NULLS);
+    }
     ;
 storage_format:
     /* empty */
@@ -671,6 +677,8 @@ comp_op:
     | NE { $$ = NOT_EQUAL; }
     | LIKE { $$ = LIKE_TO; }
     | NOT LIKE { $$ = NOT_LIKE_TO; }
+    | IS_ { $$ = IS ;}
+    | IS_ NOT { $$ = IS_NOT ;}
     ;
 
 // your code here
