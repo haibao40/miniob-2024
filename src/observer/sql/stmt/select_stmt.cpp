@@ -60,8 +60,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     tables.push_back(table);
     table_map.insert({table_name, table});
   }
-
-  // collect query fields in `select` statement
+  //李晓鹏 这里是处理未绑定的问题 将unbound... Expr 转化为 普通的expr
+  // collect query fields in `select` statement 
   vector<unique_ptr<Expression>> bound_expressions;
   ExpressionBinder expression_binder(binder_context);
   
@@ -81,6 +81,16 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return rc;
     }
   }
+  // 李晓鹏笔记 select_sql_order_by 是解析出来后面的条件 
+  vector<unique_ptr<Expression>> order_by_expressions;
+    for (unique_ptr<Expression> &expression : select_sql.order_by) {
+    RC rc = expression_binder.bind_expression(expression, order_by_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
 
   Table *default_table = nullptr;
   if (tables.size() == 1) {
@@ -107,6 +117,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->query_expressions_.swap(bound_expressions);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
+  select_stmt->order_by_.swap(order_by_expressions);
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }
