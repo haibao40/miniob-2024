@@ -150,6 +150,7 @@ struct AttrInfoSqlNode
   std::string name;    ///< Attribute name
   size_t      length;  ///< Length of attribute
   bool        not_null;///< not null限制，等于true时，表示该字段不允许设置null值
+  bool        visible = true; ///< 是否可见，等于true时，表示该字段是可见的，否则不可见,是系统隐藏字段
 };
 
 /**

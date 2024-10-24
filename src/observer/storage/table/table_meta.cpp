@@ -56,6 +56,19 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
     return RC::INVALID_ARGUMENT;
   }
 
+  //构造隐藏字段null_value_list的AttrInfoSqlNode,并且让它处于attributes的第一个位置
+  AttrInfoSqlNode null_value_list_field;
+  null_value_list_field.type = AttrType::CHARS;
+  null_value_list_field.name = "null_value_list:define by haijun";
+  null_value_list_field.length = attributes.size();
+  null_value_list_field.not_null = true;
+  null_value_list_field.visible = false;  //作为系统内部字段，外部不可见
+  std::vector<AttrInfoSqlNode> attributes_vector(attributes.begin(), attributes.end());
+  attributes_vector.insert(attributes_vector.begin(), null_value_list_field);
+
+  std::span<const AttrInfoSqlNode> span_with_null_value_list(attributes_vector.data(), attributes_vector.size());
+  attributes = span_with_null_value_list;  //现在，attributes中，第一个元素为null_value_list_field对应的AttrInfoSqlNode
+
   RC rc = RC::SUCCESS;
 
   int field_offset  = 0;
@@ -80,7 +93,7 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
     const AttrInfoSqlNode &attr_info = attributes[i];
     // `i` is the col_id of fields[i]
     rc = fields_[i + trx_field_num].init(
-      attr_info.name.c_str(), attr_info.type, field_offset, attr_info.length, true /*visible*/, i, attr_info.not_null);
+      attr_info.name.c_str(), attr_info.type, field_offset, attr_info.length, attr_info.visible /*visible*/, i, attr_info.not_null);
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
