@@ -91,7 +91,10 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
     case ExprType::AGGREGATION: {
       ASSERT(false, "shouldn't be here");
     } break;
-
+    case ExprType::UnboundORderedFieldExpr:{ 
+       // 李晓鹏笔记 此处解析order by 的内容
+       return bind_unbound_order_field_expression(expr, bound_expressions);
+    }break;
     default: {
       LOG_WARN("unknown expression type: %d", static_cast<int>(expr->type()));
       return RC::INTERNAL;
@@ -177,14 +180,57 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
   return RC::SUCCESS;
 }
-
+// 李晓鹏 照着绑定field抄就行了 ,注意在.c文件中添加一下函数的声明
 RC ExpressionBinder::bind_field_expression(
     unique_ptr<Expression> &field_expr, vector<unique_ptr<Expression>> &bound_expressions)
 {
   bound_expressions.emplace_back(std::move(field_expr));
   return RC::SUCCESS;
 }
+RC ExpressionBinder::bind_unbound_order_field_expression(unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &bound_expressions){
+   if (nullptr == expr) {
+    return RC::SUCCESS;
+  }
 
+  auto unbound_order_field_expr = static_cast<UnboundORderedFieldExpr *>(expr.get());
+
+  const char *table_name = unbound_order_field_expr->table_name();
+  const char *field_name = unbound_order_field_expr->field_name();
+  const bool is_asc = unbound_order_field_expr->get_asc(); //这行是新加入的
+
+  Table *table = nullptr;
+  if (is_blank(table_name)) {
+    if (context_.query_tables().size() != 1) {
+      LOG_INFO("cannot determine table for field: %s", field_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+
+    table = context_.query_tables()[0];
+  } else {
+    table = context_.find_table(table_name);
+    if (nullptr == table) {
+      LOG_INFO("no such table in from list: %s", table_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+  }
+
+  if (0 == strcmp(field_name, "*")) {
+    wildcard_fields(table, bound_expressions);
+  } else {
+    const FieldMeta *field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      LOG_INFO("no such field in table: %s.%s", table_name, field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+
+    Field      field(table, field_meta);
+    ORderedFieldExpr *field_expr = new ORderedFieldExpr(field,is_asc);
+    field_expr->set_name(field_name);
+    bound_expressions.emplace_back(field_expr);
+  }
+
+  return RC::SUCCESS;
+}
 RC ExpressionBinder::bind_value_expression(
     unique_ptr<Expression> &value_expr, vector<unique_ptr<Expression>> &bound_expressions)
 {

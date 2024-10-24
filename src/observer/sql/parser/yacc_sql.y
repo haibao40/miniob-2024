@@ -69,12 +69,14 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         CREATE
         DROP
         GROUP
+        ORDER
         TABLE
         TABLES
         INDEX
         CALC
         SELECT
         DESC
+        ASC
         SHOW
         SYNC
         INSERT
@@ -114,7 +116,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NE
         NOT
         LIKE
-        
+
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -160,6 +162,9 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
+%type <expression_list>     order_by
+%type <expression>          order_by_field 
+%type <expression_list>     order_by_field_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -452,7 +457,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by
+    SELECT expression_list FROM rel_list where group_by order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -473,6 +478,9 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($6 != nullptr) {
         $$->selection.group_by.swap(*$6);
         delete $6;
+      }if ($7 != nullptr) {
+        $$->selection.order_by.swap(*$7);
+        delete $7;
       }
     }
     ;
@@ -576,6 +584,52 @@ rel_list:
     }
     ;
 
+order_by_field:
+    rel_attr DESC {
+      RelAttrSqlNode *node = $1;
+      $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,false);
+      $$->set_name(token_name(sql_string, &@$));
+      delete $1; 
+    }|
+    rel_attr {
+      RelAttrSqlNode *node = $1;
+      $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,true);
+      $$->set_name(token_name(sql_string, &@$));
+      delete $1; 
+    }| rel_attr ASC {
+      RelAttrSqlNode *node = $1;
+      $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,true);
+      $$->set_name(token_name(sql_string, &@$));
+      delete $1; 
+    } ;
+order_by_field_list:
+    {
+      $$ = nullptr;
+    }|
+    order_by_field{
+      $$ = new std::vector<std::unique_ptr<Expression>> ;
+      $$->emplace_back($1);
+      //delete $1;
+    }
+    | order_by_field COMMA order_by_field_list {
+      $$ = $3;
+      $$->emplace_back($1);
+      //delete $1; 我也不知道为啥，有这个和上一个delect 会报错
+    };
+order_by:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | ORDER BY order_by_field_list
+    {
+      if($3 != nullptr){
+        $$ = $3;
+      }else{
+        $$ = nullptr;
+      }
+    }
+    ;
 where:
     /* empty */
     {
@@ -664,6 +718,7 @@ comp_op:
     ;
 
 // your code here
+
 group_by:
     /* empty */
     {
