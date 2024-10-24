@@ -95,7 +95,7 @@ RC OrderByPhysicalOperator::next()
   }
   //
   if(size<=index_current){
-    return RC::INTERNAL;
+    return RC::RECORD_EOF;
   }else{
     return RC::SUCCESS;
   }
