@@ -36,7 +36,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
                                              const char *sql_string,
                                              YYLTYPE *llocp)
 {
-  printf("Type: ");
+  //if(type == ArithmeticExpr::Type::DIV && strcmp(right->name(),"0") == 0){
+  //  ArithmeticExpr *expr = new ArithmeticExpr(ArithmeticExpr::Type::DIV, left, nullptr);
+  //  expr->set_name(token_name(sql_string, llocp));
+  //  return expr;
+  //}
   Value value(0);
   ValueExpr *zero = new ValueExpr(value);
   ArithmeticExpr *expr = type == ArithmeticExpr::Type::NEGATIVE ? new ArithmeticExpr(ArithmeticExpr::Type::SUB, zero, left) : new ArithmeticExpr(type, left, right);
