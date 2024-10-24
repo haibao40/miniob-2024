@@ -175,17 +175,20 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
         if((filter_obj_left.is_attr && filter_obj_left.field.attr_type() == AttrType::DATES) || (!filter_obj_left.is_attr && filter_obj_left.value.attr_type() == AttrType::DATES)){
           auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
           if(right_to_left_cost < INT32_MAX ){
-            const char* tmp = right.get()->name();
-            Value tmp_value(tmp);
-            rc = DataType::type_instance(AttrType::CHARS)->cast_to(tmp_value, AttrType::DATES, tmp_value);
-            if(rc != RC::SUCCESS){
-              return rc;
-            }
-            
-            // Value value = right.get_value();
-            // DataType::type_instance(left->value_type())->cast_to()
+            ExprType right_type = right->type();
             auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
-            right = std::move(cast_expr);
+            if (right_type == ExprType::VALUE) {
+              Value right_val;
+              if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
+              {
+                LOG_WARN("failed to get value from right child", strrc(rc));
+                return rc;
+              }
+              right = make_unique<ValueExpr>(right_val);
+            } else {
+              right = std::move(cast_expr);
+            }
+
           }
         }
         ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
