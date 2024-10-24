@@ -39,7 +39,8 @@ enum class ExprType
   STAR,                 ///< 星号，表示所有字段
   UNBOUND_FIELD,        ///< 未绑定的字段，需要在resolver阶段解析为FieldExpr
   UNBOUND_AGGREGATION,  ///< 未绑定的聚合函数，需要在resolver阶段解析为AggregateExpr
-
+  UnboundORderedFieldExpr, //李晓鹏 未绑定的排序，需要在resolver阶段解析为AggregateExpr
+  ORderedFieldExpr,   //用于排序的Expr
   FIELD,        ///< 字段。在实际执行时，根据行数据内容提取对应字段的值
   VALUE,        ///< 常量值
   CAST,         ///< 需要做类型转换的表达式
@@ -47,6 +48,7 @@ enum class ExprType
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
   AGGREGATION,  ///< 聚合运算
+  
 };
 
 /**
@@ -179,6 +181,8 @@ private:
  * @brief 字段表达式
  * @ingroup Expression
  */
+
+
 class FieldExpr : public Expression
 {
 public:
@@ -467,4 +471,30 @@ public:
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
+};
+
+
+class UnboundORderedFieldExpr: public UnboundFieldExpr
+{
+    public:
+      bool asc ;
+     ExprType type() const override { return ExprType::UnboundORderedFieldExpr; }
+    UnboundORderedFieldExpr(const std::string &table_name, const std::string &field_name, const bool &asc_)
+          : UnboundFieldExpr(table_name, field_name), asc(asc_) {
+          // 构造函数体可以为空，因为所有初始化已经在初始化列表中完成
+      }
+    bool get_asc() const { return asc; }  
+};
+
+
+class ORderedFieldExpr : public FieldExpr
+{
+public:
+  ExprType type() const override { return ExprType::ORderedFieldExpr; }
+  bool asc;
+  ORderedFieldExpr(const Table *table, const FieldMeta *field, const bool asc_) : FieldExpr(table, field), asc(asc_) {}
+  ORderedFieldExpr(const Field &field,const bool asc_) : FieldExpr(field), asc(asc_) {}
+  bool get_asc() const { return asc; }
+
+  
 };
