@@ -29,6 +29,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
+#include "sql/operator/order_by_logical_operator.h"
 
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
@@ -139,7 +140,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
     return rc;
   }
-
+  
   if (group_by_oper) {
     if (*last_oper) {
       group_by_oper->add_child(std::move(*last_oper));
@@ -147,7 +148,21 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
     last_oper = &group_by_oper;
   }
+  
+  unique_ptr<LogicalOperator> order_by_oper; //李晓鹏笔记 将逻辑计划加入到逻辑计划树形结构里面 在视图下面 在group by 上面
+  rc = create_order_by_plan(select_stmt, order_by_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+  if(order_by_oper){
+      if (*last_oper) {
+      order_by_oper->add_child(std::move(*last_oper));
+    }
+    last_oper = &order_by_oper;
+  }
 
+  
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
   if (*last_oper) {
     project_oper->add_child(std::move(*last_oper));
@@ -342,6 +357,20 @@ RC LogicalPlanGenerator::create_plan(ExplainStmt *explain_stmt, unique_ptr<Logic
   return rc;
 }
 
+// 李晓鹏笔记 搞一个 order_by的逻辑计划 几乎照抄 group_by_plan
+RC LogicalPlanGenerator::create_order_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator){
+  vector<unique_ptr<Expression>> &order_by_expressions = select_stmt->order_by();
+  if(order_by_expressions.empty()){
+    logical_operator = NULL;
+    return RC::SUCCESS; 
+  }
+  // 这里应该先遍历一下，看看有没有未绑定的字段，如果有那么报错 不搞了
+  // 如果这个物理计划需要其他的Expression 那么合并 不搞了
+    auto order_by_oper = make_unique<OrderByLogicalOperator>(std::move(order_by_expressions)); //李晓鹏笔记 没有这一行 logical_operator会更新不了
+    logical_operator = std::move(order_by_oper);
+    return RC::SUCCESS;
+  
+}
 RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   vector<unique_ptr<Expression>> &group_by_expressions = select_stmt->group_by();
