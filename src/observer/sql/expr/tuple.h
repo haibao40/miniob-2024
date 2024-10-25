@@ -214,7 +214,7 @@ public:
     if(index > table_->table_meta().sys_field_num()) {
       //判断是否为空值，是就直接返回，否则才去拷贝对应的内存
       int before_field_count = table_->table_meta().sys_field_num()+ 1; //用户定义的数据字段是从sys_field、null_field_list之后开始
-      int pos_in_null_value_list = index+1 - before_field_count;  //计算这是第几个用户定义的表字段
+      int pos_in_null_value_list = index - before_field_count;  //计算这是第几个用户定义的表字段
       if(null_value_list_[pos_in_null_value_list] == '1') {
         cell.set_null();
         return RC::SUCCESS;
