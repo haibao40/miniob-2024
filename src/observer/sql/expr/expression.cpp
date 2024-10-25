@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
 #include <stack>
+#include <common/type/null_type.h>
 
 using namespace std;
 
@@ -122,8 +123,28 @@ ComparisonExpr::~ComparisonExpr() {}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
-  int cmp_result = left.compare(right);
   result         = false;
+
+  //TODO:将和null值相关的各种比较运算，提取出一个函数，避免这里代码太长太乱
+  //对于某些在comp_op_list中的比较类型，如果待比较的值中，包含了null_type类型的value，在这里单独处理
+  std::vector<CompOp> comp_op_list = {EQUAL_TO, LESS_EQUAL, NOT_EQUAL, LESS_THAN, GREAT_EQUAL, GREAT_THAN};
+  if(std::find(comp_op_list.begin(), comp_op_list.end(), comp_) != comp_op_list.end()) {
+    if(left.attr_type() == AttrType::NULLS) {
+      result = NullType().compare_with_null_type(left, right);
+      return rc;
+    }
+    if(right.attr_type() == AttrType::NULLS) {
+      result = NullType().compare_with_null_type(left, right);
+      return rc;
+    }
+  }
+
+  int cmp_result = 0;
+  //只有在左右都不是null的情况下，才执行这个比较运算
+  if(left.attr_type() != AttrType::NULLS && right.attr_type() != AttrType::NULLS) {
+    cmp_result = left.compare(right);
+  }
+
   switch (comp_) {
     case EQUAL_TO: {
       result = (0 == cmp_result);
@@ -148,6 +169,13 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     }break;
     case NOT_LIKE_TO:{
       rc = (like_value(left, right,result));
+      result = !result;
+    }break;
+    case IS: {
+      rc = is(left, right, result);
+    }break;
+    case IS_NOT:{
+      rc = is(left, right, result);
       result = !result;
     }break;
     default: {
@@ -323,6 +351,22 @@ RC ComparisonExpr::like_value(const Value &left, const Value &right, bool &resul
   }
   return rc;
 }
+
+
+RC ComparisonExpr::is(const Value &left, const Value &right, bool &value) const
+{
+  value = false;
+  if(left.attr_type() == right.attr_type()) {
+    if(left.attr_type() == AttrType::NULLS) { //sql中，null=null返回的是false，因此null_type的is运算不能依靠比较函数
+      value = true;
+    }
+    else {
+      value = (left.compare(right) == 0);   //比较函数返回0，表示相等
+    }
+  }
+  return RC::SUCCESS;
+}
+
 RC ComparisonExpr::try_get_value(Value &cell) const
 {
   if (left_->type() == ExprType::VALUE && right_->type() == ExprType::VALUE) {

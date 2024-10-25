@@ -56,6 +56,7 @@ public:
 
   int field_num() const;  // sys field included
   int sys_field_num() const;
+  int system_not_visible_field_number() const;
 
   const IndexMeta *index(const char *name) const;
   const IndexMeta *find_index_by_field(const char *field) const;
@@ -78,6 +79,7 @@ protected:
   std::vector<FieldMeta> fields_;  // 包含sys_fields
   std::vector<IndexMeta> indexes_;
   StorageFormat          storage_format_;
+  int                    system_not_visible_field_number_ = 1; //系统内部的不可见字段数量(不包括trx类型的字段)：当前只有空值列表：null_value_list
 
   int record_size_ = 0;
 };

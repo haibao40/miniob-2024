@@ -116,6 +116,9 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NE
         NOT
         LIKE
+        IS_     //后面加上_,用以区分枚举值IS
+        NULL_T
+
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -146,6 +149,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
 %type <number>              type
+%type <number>              not_null
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
@@ -163,7 +167,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
 %type <expression_list>     order_by
-%type <expression>          order_by_field 
+%type <expression>          order_by_field
 %type <expression_list>     order_by_field_list
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
@@ -345,22 +349,30 @@ attr_def_list:
     ;
     
 attr_def:
-    ID type LBRACE number RBRACE 
+    ID type LBRACE number RBRACE not_null
     {
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = $4;
+      $6 == 1 ? $$->not_null = true : $$->not_null = false;
       free($1);
     }
-    | ID type
+    | ID type not_null
     {
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = 4;
+      $3 == 1 ? $$->not_null = true : $$->not_null = false;
       free($1);
     }
+    ;
+not_null:
+    /* empty */
+    {$$ = 0;}
+    | NULL_T {$$ = 0;}
+    | NOT NULL_T {$$ = 1;}
     ;
 number:
     NUMBER {$$ = $1;}
@@ -416,6 +428,10 @@ value:
       $$ = new Value(tmp);
       free(tmp);
       free($1);
+    }
+    | NULL_T {
+      $$ = new Value();
+      $$->set_null();
     }
     ;
 storage_format:
@@ -589,18 +605,18 @@ order_by_field:
       RelAttrSqlNode *node = $1;
       $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,false);
       $$->set_name(token_name(sql_string, &@$));
-      delete $1; 
+      delete $1;
     }|
     rel_attr {
       RelAttrSqlNode *node = $1;
       $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,true);
       $$->set_name(token_name(sql_string, &@$));
-      delete $1; 
+      delete $1;
     }| rel_attr ASC {
       RelAttrSqlNode *node = $1;
       $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,true);
       $$->set_name(token_name(sql_string, &@$));
-      delete $1; 
+      delete $1;
     } ;
 order_by_field_list:
     {
@@ -715,6 +731,8 @@ comp_op:
     | NE { $$ = NOT_EQUAL; }
     | LIKE { $$ = LIKE_TO; }
     | NOT LIKE { $$ = NOT_LIKE_TO; }
+    | IS_ { $$ = IS ;}
+    | IS_ NOT { $$ = IS_NOT ;}
     ;
 
 // your code here

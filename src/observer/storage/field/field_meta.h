@@ -30,10 +30,10 @@ class FieldMeta
 {
 public:
   FieldMeta();
-  FieldMeta(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id);
+  FieldMeta(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id, bool not_null=false);
   ~FieldMeta() = default;
 
-  RC init(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id);
+  RC init(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id, bool not_null=false);
 
 public:
   const char *name() const;
@@ -42,6 +42,7 @@ public:
   int         len() const;
   bool        visible() const;
   int         field_id() const;
+  bool        not_null() const;
 
 public:
   void desc(ostream &os) const;
@@ -49,7 +50,8 @@ public:
 public:
   void      to_json(Json::Value &json_value) const;
   static RC from_json(const Json::Value &json_value, FieldMeta &field);
-
+  // 特别记录一下空值列表的字段名
+  static const std::string null_value_list_field_name;
 protected:
   string   name_;
   AttrType attr_type_;
@@ -57,4 +59,5 @@ protected:
   int      attr_len_;
   bool     visible_;
   int      field_id_;
+  bool     not_null_;   //true：表示在创建表时，该字段被标记为not null，默认为false
 };

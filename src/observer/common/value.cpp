@@ -158,6 +158,13 @@ void Value::set_boolean(bool val)
   length_            = sizeof(val);
 }
 
+void Value::set_null()
+{
+  reset();
+  attr_type_ = AttrType::NULLS;
+  length_ = 0;  //由于null_type实际上没有存储任何的数据，所以这里设置为0
+}
+
 void Value::set_string(const char *s, int len /*= 0*/)
 {
   reset();
@@ -188,6 +195,7 @@ void Value::set_date(int year, int month, int day)
   value_.int_value_ = date_value;  //这里的date使用的是int存储
   length_ = sizeof(date_value);
 }
+
 
 void Value::set_value(const Value &value)
 {
@@ -340,4 +348,9 @@ bool Value::get_boolean() const
     }
   }
   return false;
+}
+
+const char* Value::get_char_data()
+{
+  return value_.pointer_value_;
 }
