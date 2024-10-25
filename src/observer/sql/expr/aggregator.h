@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/value.h"
 #include "common/rc.h"
+#include <iostream>
 
 class Aggregator
 {
@@ -34,4 +35,33 @@ class SumAggregator : public Aggregator
 public:
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
+};
+
+class MaxAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+};
+
+class MinAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+};
+
+class AvgAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+    void add_len() { len_++; }
+  private:
+    int len_=1;
+};
+
+class CountAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+  private:
+    bool flag = false;
 };

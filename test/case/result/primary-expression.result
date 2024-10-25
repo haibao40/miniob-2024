@@ -11,7 +11,7 @@ SUCCESS
 1. SELECT
 select * from exp_table where 1 = 5/4;
 ID | COL1 | COL2 | COL3 | COL4
-select * from exp_table where col1-2 > 0;
+select * from exp_table where col1 - 2 > 0;
 3 | 3 | 4 | 5 | 4
 ID | COL1 | COL2 | COL3 | COL4
 select * from exp_table where 2+col2 < 1;
@@ -23,13 +23,13 @@ ID | COL1 | COL2 | COL3 | COL4
 
 select * from exp_table where 5/4 = 1;
 ID | COL1 | COL2 | COL3 | COL4
-select * from exp_table where 0 < col1-2;
+select * from exp_table where 0 < col1 - 2;
 3 | 3 | 4 | 5 | 4
 ID | COL1 | COL2 | COL3 | COL4
 select * from exp_table where 1.0 > 2+col2;
 2 | 2 | -2 | 5.5 | 1
 ID | COL1 | COL2 | COL3 | COL4
-select * from exp_table where -0 < col1-col2;
+select * from exp_table where -0 < col1 - col2;
 2 | 2 | -2 | 5.5 | 1
 ID | COL1 | COL2 | COL3 | COL4
 select * from exp_table where 0 < -2+col1;

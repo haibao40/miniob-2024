@@ -89,7 +89,8 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
     } break;
 
     case ExprType::AGGREGATION: {
-      ASSERT(false, "shouldn't be here");
+      // ASSERT(false, "shouldn't be here");
+      return bind_aggregate_expression(expr, bound_expressions);
     } break;
 
     default: {
@@ -417,6 +418,10 @@ RC ExpressionBinder::bind_aggregate_expression(
     return rc;
   }
 
+  if(unbound_aggregate_expr->child() == nullptr){
+    LOG_WARN("there is no child");
+    return RC::NOT_EXIST;
+  }
   unique_ptr<Expression>        &child_expr = unbound_aggregate_expr->child();
   vector<unique_ptr<Expression>> child_bound_expressions;
 
