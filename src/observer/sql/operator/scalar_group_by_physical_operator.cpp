@@ -85,6 +85,29 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
   // 得到最终聚合后的值
   if (group_value_) {
     rc = evaluate(*group_value_);
+  }else{
+    AggregatorList aggregator_list;
+    create_aggregator_list(aggregator_list);
+
+    ValueListTuple child_tuple_to_value;
+    ValueListTuple::set_zero_cells(child_tuple_to_value, aggregator_list.size());
+      // rc = ValueListTuple::make(*child_tuple, child_tuple_to_value);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to make tuple to value list. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    // for(int i = 0; i < child_tuple_to_value.cell_num(); i++){
+    //   Value value;
+    //   child_tuple_to_value.cell_at(i, value);
+    //   const char* result = value.to_string().c_str();
+    //   printf("\n value: %s\n", result);
+    // }
+    CompositeTuple composite_tuple;
+    // composite_tuple.add_tuple(make_unique<ValueListTuple>(std::move(child_tuple_to_value)));
+    group_value_ = make_unique<GroupValueType>(std::move(aggregator_list), std::move(composite_tuple));
+
+    rc = evaluate(*group_value_);
   }
 
   emitted_ = false;

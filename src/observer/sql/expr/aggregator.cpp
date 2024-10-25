@@ -31,6 +31,11 @@ RC SumAggregator::accumulate(const Value &value)
 //-1< 0= 1>
 RC SumAggregator::evaluate(Value& result)
 {
+  if(value_.attr_type() == AttrType::UNDEFINED){
+    Value zero(0);
+    result = zero;
+    return RC::SUCCESS;
+  }
   result = value_;
   return RC::SUCCESS;
 }
@@ -96,13 +101,19 @@ RC AvgAggregator::accumulate(const Value &value)
 
 RC AvgAggregator::evaluate(Value &result)
 {
+  if(value_.attr_type() == AttrType::UNDEFINED){
+    Value zero(0);
+    result = zero;
+    return RC::SUCCESS;
+  }
   bool is_int = value_.attr_type() == AttrType::INTS;
   const Value& length = Value(len_); 
   value_.set_type(AttrType::FLOATS);
+  if(is_int) value_.int2float();
   Value::divide(value_, length, value_);
   result = value_;
-  if(is_int)
-    result.set_type(AttrType::INTS);
+  // if(is_int)
+  //   result.set_type(AttrType::INTS);
   return RC::SUCCESS;
 }
 
@@ -122,11 +133,21 @@ RC CountAggregator::accumulate(const Value &value)
     value_ = one;
   }
   Value::add(one, value_, value_);
+  count++;
   return RC::SUCCESS;
 }
 //-1< 0= 1>
 RC CountAggregator::evaluate(Value &result)
 {
+  if(value_.attr_type() == AttrType::UNDEFINED){
+    Value zero(0);
+    result = zero;
+    return RC::SUCCESS;
+  }
+  if(count == 1){
+    Value one(1);
+    value_ = one;
+  }
   result = value_;
   return RC::SUCCESS;
 }

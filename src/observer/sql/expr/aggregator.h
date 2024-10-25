@@ -63,5 +63,6 @@ class CountAggregator : public Aggregator{
     RC accumulate(const Value &value) override;
     RC evaluate(Value &result) override;
   private:
+    int count=1;
     bool flag = false;
 };

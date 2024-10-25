@@ -91,6 +91,12 @@ public:
   void set_value(const Value &value);
   void set_boolean(bool val);
 
+  void int2float(){
+    int tmp = this->value_.int_value_;
+    float ftmp = (float)tmp;
+    this->set_float(ftmp);
+  }
+
   string to_string() const;
 
   int compare(const Value &other) const;
