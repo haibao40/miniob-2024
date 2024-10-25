@@ -335,7 +335,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     return rc;
   }
   new_values[0] = null_value_list;
-  for(int i = 1; i < value_num; i++) {
+  for(int i = 1; i < value_num+1; i++) {
     new_values[i] = values[i-1];
   }
   values = new_values;
@@ -350,7 +350,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
-    if (field->type() != value.attr_type()) {
+    if (field->type() != value.attr_type() && value.attr_type() != AttrType::NULLS) { //只有类型不一致，且提供的不是null值，才进行类型转换
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {
@@ -375,31 +375,34 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
 RC Table::get_null_value_list(int value_num, const Value *values, Value& result)
 {
-  const std::vector<FieldMeta> field_metas = *(table_meta_.field_metas());
+  std::vector<FieldMeta> field_metas = *(table_meta_.field_metas()); //注意：第一个是null值列表对应的字段元信息
   FieldMeta null_value_list_field_meta = field_metas[table_meta_.sys_field_num()];
+  LOG_INFO("len:%d",null_value_list_field_meta.len());
   char* null_value_list_data = (char *) malloc(null_value_list_field_meta.len());
+  null_value_list_data[value_num] = '\0'; //字符串结束符
   for(int i = 0; i < value_num;i++) {
-    if(field_metas[i].not_null()) {//字段元信息要求不是null
+    if(field_metas[i+1].not_null()) {//字段元信息要求不是null
       if(values[i].attr_type() != AttrType::NULLS) { //提供的数据不是null
-        null_value_list_data[i] = 0;
+        null_value_list_data[i] = '0';
       }
       else { //提供的数据是null
-        LOG_INFO("字段:%s不能为空值\n",field_metas[i].name());
+        LOG_INFO("字段:%s不能为空值\n",field_metas[i+1].name());
         return RC::FIELD_CAN_NOT_BE_NULL;
       }
     }
-    else if(!field_metas[i].not_null() && values[i].attr_type() != AttrType::NULLS) //字段元信息没有要求不是null
+    else if(!field_metas[i+1].not_null()) //字段元信息没有要求不是null
     {
       if(values[i].attr_type() != AttrType::NULLS) { //提供的数据不是null
-        null_value_list_data[i] = 0;
+        null_value_list_data[i] = '0';
       }
       else { //提供的数据是null
-        null_value_list_data[i] = 1;
+        null_value_list_data[i] = '1';
       }
     }
   }
-  free(null_value_list_data); //释放内存
-  result.set_data(null_value_list_data, null_value_list_field_meta.len());
+  result.set_type(AttrType::CHARS);
+  result.set_data(null_value_list_data, strlen(null_value_list_data));
+  free(null_value_list_data); //释放临时内存
   return RC::SUCCESS;
 }
 

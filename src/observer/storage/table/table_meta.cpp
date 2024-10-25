@@ -60,7 +60,7 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
   AttrInfoSqlNode null_value_list_field;
   null_value_list_field.type = AttrType::CHARS;
   null_value_list_field.name = FieldMeta::null_value_list_field_name;
-  null_value_list_field.length = attributes.size();
+  null_value_list_field.length = attributes.size()+1; //因为是char* ,所以，加一个字符串结束符'\0'
   null_value_list_field.not_null = true;
   null_value_list_field.visible = false;  //作为系统内部字段，外部不可见
   std::vector<AttrInfoSqlNode> attributes_vector(attributes.begin(), attributes.end());
