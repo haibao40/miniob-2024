@@ -123,9 +123,9 @@ ComparisonExpr::~ComparisonExpr() {}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
-  int cmp_result = left.compare(right);
   result         = false;
 
+  //TODO:将和null值相关的各种比较运算，提取出一个函数，避免这里代码太长太乱
   //对于某些在comp_op_list中的比较类型，如果待比较的值中，包含了null_type类型的value，在这里单独处理
   std::vector<CompOp> comp_op_list = {EQUAL_TO, LESS_EQUAL, NOT_EQUAL, LESS_THAN, GREAT_EQUAL, GREAT_THAN};
   if(std::find(comp_op_list.begin(), comp_op_list.end(), comp_) != comp_op_list.end()) {
@@ -137,6 +137,12 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
       result = NullType().compare_with_null_type(left, right);
       return rc;
     }
+  }
+
+  int cmp_result = 0;
+  //只有在左右都不是null的情况下，才执行这个比较运算
+  if(left.attr_type() != AttrType::NULLS && right.attr_type() != AttrType::NULLS) {
+    cmp_result = left.compare(right);
   }
 
   switch (comp_) {
