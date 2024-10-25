@@ -33,7 +33,19 @@ RC OrderByPhysicalOperator::sorteTuples(){
                Value bValue ;
                a->find_cell(*cellSpec, aValue);
                b->find_cell(*cellSpec, bValue);
-               result = aValue.compare(bValue);             
+               if(aValue.attr_type() == AttrType::NULLS || aValue.attr_type() == AttrType::NULLS ){
+                  if(aValue.attr_type() == AttrType::NULLS && bValue.attr_type() == AttrType::NULLS){
+                    result = 0;
+                  }else{
+                    if(aValue.attr_type() == AttrType::NULLS){ 
+                        result = -1;
+                    }else{
+                       result = 1 ;
+                    }
+                  }
+               }else{
+                  result = aValue.compare(bValue);             
+               }
                if(isAscending == false){
                 result = -result;
                }
