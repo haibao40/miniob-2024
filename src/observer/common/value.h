@@ -91,6 +91,10 @@ public:
   void set_data(const char *data, int length) { this->set_data(const_cast<char *>(data), length); }
   void set_value(const Value &value);
   void set_boolean(bool val);
+  /***
+   * @brief 将value设置为null_type类型的数据
+   */
+  void set_null();
 
   string to_string() const;
 
@@ -111,6 +115,12 @@ public:
   string get_string() const;
   bool   get_boolean() const;
 
+
+  /***
+   *用来获取内部的数据指针
+   */
+  const char* get_char_data();
+
 private:
   void set_int(int val);
   void set_float(float val);
@@ -121,10 +131,6 @@ private:
    */
   void set_date(int year, int month, int day);
 
-  /***
-   * @brief 将value 设置为NULL类型的数据
-   */
-  void set_null();
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;

@@ -59,7 +59,7 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
   //构造隐藏字段null_value_list的AttrInfoSqlNode,并且让它处于attributes的第一个位置
   AttrInfoSqlNode null_value_list_field;
   null_value_list_field.type = AttrType::CHARS;
-  null_value_list_field.name = "null_value_list:define by haijun";
+  null_value_list_field.name = FieldMeta::null_value_list_field_name;
   null_value_list_field.length = attributes.size();
   null_value_list_field.not_null = true;
   null_value_list_field.visible = false;  //作为系统内部字段，外部不可见
@@ -152,6 +152,8 @@ const FieldMeta *TableMeta::find_field_by_offset(int offset) const
 int TableMeta::field_num() const { return fields_.size(); }
 
 int TableMeta::sys_field_num() const { return static_cast<int>(trx_fields_.size()); }
+
+int TableMeta::system_not_visible_field_number() const {return system_not_visible_field_number_;}
 
 const IndexMeta *TableMeta::index(const char *name) const
 {
@@ -281,7 +283,8 @@ int TableMeta::deserialize(std::istream &is)
   record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
 
   for (const FieldMeta &field_meta : fields_) {
-    if (!field_meta.visible()) {
+    //官方原本的代码，将不可见的字段加入到trx_fields_中，但是，null_value_list虽然不可见，却和事务没有关系，不是trx类型的字段，需要单独判断一下，避免将其加入事务字段列表中
+    if (!field_meta.visible() && strcmp(field_meta.name(), FieldMeta::null_value_list_field_name.c_str()) != 0) {
       trx_fields_.push_back(field_meta); // 字段加上trx标识更好
     }
   }

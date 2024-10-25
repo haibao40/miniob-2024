@@ -425,8 +425,7 @@ value:
     }
     | NULL_T {
       $$ = new Value();
-      $$->reset();
-      $$->set_type(AttrType::NULLS);
+      $$->set_null();
     }
     ;
 storage_format:

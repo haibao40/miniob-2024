@@ -320,11 +320,26 @@ const TableMeta &Table::table_meta() const { return table_meta_; }
 RC Table::make_record(int value_num, const Value *values, Record &record)
 {
   RC rc = RC::SUCCESS;
-  // 检查字段类型是否一致
-  if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
+  // 检查字段类型是否一致, +1 是因为系统自带一个空值列表的隐藏字段
+  if (value_num + 1 + table_meta_.sys_field_num() != table_meta_.field_num()) {
     LOG_WARN("Input values don't match the table's schema, table name:%s", table_meta_.name());
     return RC::SCHEMA_FIELD_MISSING;
   }
+
+  //在创建record记录时，将隐藏字段空值列表null_value_list对应的数据一起添加到record中
+  Value *new_values = new Value[value_num+1];
+  Value null_value_list = Value();
+  rc = get_null_value_list(value_num, values, null_value_list);
+  if(rc != RC::SUCCESS) {
+    LOG_INFO("make_record过程中，获取隐藏字段空值列表失败\n");
+    return rc;
+  }
+  new_values[0] = null_value_list;
+  for(int i = 1; i < value_num; i++) {
+    new_values[i] = values[i-1];
+  }
+  values = new_values;
+  value_num = value_num + 1; //因为添加了隐藏字段，所以value_num需要+1
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 复制所有字段的值
@@ -355,6 +370,36 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   }
 
   record.set_data_owner(record_data, record_size);
+  return RC::SUCCESS;
+}
+
+RC Table::get_null_value_list(int value_num, const Value *values, Value& result)
+{
+  const std::vector<FieldMeta> field_metas = *(table_meta_.field_metas());
+  FieldMeta null_value_list_field_meta = field_metas[table_meta_.sys_field_num()];
+  char* null_value_list_data = (char *) malloc(null_value_list_field_meta.len());
+  for(int i = 0; i < value_num;i++) {
+    if(field_metas[i].not_null()) {//字段元信息要求不是null
+      if(values[i].attr_type() != AttrType::NULLS) { //提供的数据不是null
+        null_value_list_data[i] = 0;
+      }
+      else { //提供的数据是null
+        LOG_INFO("字段:%s不能为空值\n",field_metas[i].name());
+        return RC::FIELD_CAN_NOT_BE_NULL;
+      }
+    }
+    else if(!field_metas[i].not_null() && values[i].attr_type() != AttrType::NULLS) //字段元信息没有要求不是null
+    {
+      if(values[i].attr_type() != AttrType::NULLS) { //提供的数据不是null
+        null_value_list_data[i] = 0;
+      }
+      else { //提供的数据是null
+        null_value_list_data[i] = 1;
+      }
+    }
+  }
+  free(null_value_list_data); //释放内存
+  result.set_data(null_value_list_data, null_value_list_field_meta.len());
   return RC::SUCCESS;
 }
 

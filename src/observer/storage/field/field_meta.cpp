@@ -91,6 +91,9 @@ void FieldMeta::to_json(Json::Value &json_value) const
   json_value[FIELD_NOT_NULL] = not_null_;
 }
 
+//这里设置了null_value_list_field使用的字段名，后面加了点东西，方便debug遇到这里的错误的时候，知道这是谁写的
+const std::string FieldMeta::null_value_list_field_name = "null_value_list:define by haijun";
+
 RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
 {
   if (!json_value.isObject()) {

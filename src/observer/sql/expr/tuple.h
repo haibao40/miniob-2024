@@ -171,7 +171,21 @@ public:
     speces_.clear();
   }
 
-  void set_record(Record *record) { this->record_ = record; }
+  void set_record(Record *record)
+  {
+    this->record_ = record;
+    //拿到空值列表，方便之后读取数据时，判断是否为null值
+    int null_field_list_index = table_->table_meta().sys_field_num();
+    Value* null_value_list = new Value();
+    RC rc = cell_at(null_field_list_index, *null_value_list);
+    if(rc != RC::SUCCESS){
+      LOG_INFO("从record中读取空值列表失败\n");
+      throw "从 record中读取空值列表失败";
+    }
+    else {
+      null_value_list_ = null_value_list->get_char_data();
+    }
+  }
 
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
   {
@@ -195,6 +209,16 @@ public:
     if (index < 0 || index >= static_cast<int>(speces_.size())) {
       LOG_WARN("invalid argument. index=%d", index);
       return RC::INVALID_ARGUMENT;
+    }
+    //系统字段和空值列表字段之外的用户定义的表字段，可能为空值，需要提前判断
+    if(index > table_->table_meta().sys_field_num()) {
+      //判断是否为空值，是就直接返回，否则才去拷贝对应的内存
+      int before_field_count = table_->table_meta().sys_field_num()+ 1; //用户定义的数据字段是从sys_field、null_field_list之后开始
+      int pos_in_null_value_list = index+1 - before_field_count;  //计算这是第几个用户定义的表字段
+      if(null_value_list_[pos_in_null_value_list] == 1) {
+        cell.set_null();
+        return RC::SUCCESS;
+      }
     }
 
     FieldExpr       *field_expr = speces_[index];
@@ -249,6 +273,7 @@ private:
   Record                  *record_ = nullptr;
   const Table             *table_  = nullptr;
   std::vector<FieldExpr *> speces_;
+  const char* null_value_list_ = nullptr;   //空值列表，1:表示对应位置的cell为空值
 };
 
 /**

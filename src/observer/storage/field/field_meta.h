@@ -50,7 +50,8 @@ public:
 public:
   void      to_json(Json::Value &json_value) const;
   static RC from_json(const Json::Value &json_value, FieldMeta &field);
-
+  // 特别记录一下空值列表的字段名
+  static const std::string null_value_list_field_name;
 protected:
   string   name_;
   AttrType attr_type_;

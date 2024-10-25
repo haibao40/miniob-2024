@@ -125,6 +125,13 @@ private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
   RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field);
+  /***
+   * @brief 获取空值列表
+   * @param value_num 数据的个数
+   * @param values 存储value数组的指针
+   * @param result 生成的空值列表对应的value
+   */
+  RC get_null_value_list(int value_num, const Value *values, Value& result);
 
 private:
   RC init_record_handler(const char *base_dir);
