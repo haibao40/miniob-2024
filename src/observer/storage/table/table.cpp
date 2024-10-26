@@ -320,8 +320,8 @@ const TableMeta &Table::table_meta() const { return table_meta_; }
 RC Table::make_record(int value_num, const Value *values, Record &record)
 {
   RC rc = RC::SUCCESS;
-  // 检查字段类型是否一致, +1 是因为系统自带一个空值列表的隐藏字段
-  if (value_num + 1 + table_meta_.sys_field_num() != table_meta_.field_num()) {
+  // 检查字段类型是否一致, 注意，系统自带一个空值列表的隐藏字段
+  if (value_num + table_meta_.system_not_visible_field_number() + table_meta_.sys_field_num() != table_meta_.field_num()) {
     LOG_WARN("Input values don't match the table's schema, table name:%s", table_meta_.name());
     return RC::SCHEMA_FIELD_MISSING;
   }

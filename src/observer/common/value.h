@@ -91,6 +91,12 @@ public:
   void set_data(const char *data, int length) { this->set_data(const_cast<char *>(data), length); }
   void set_value(const Value &value);
   void set_boolean(bool val);
+
+  /***
+   * @brief 将value设置为vector类型的数据
+   */
+  void set_vector(const vector<float>& vector);
+
   /***
    * @brief 将value设置为null_type类型的数据
    */
@@ -100,6 +106,9 @@ public:
 
   int compare(const Value &other) const;
 
+  /***
+   *@brief 实际存储时，会从这里拿到对应的二进制数据，虽然是一个char* 的指针，但是，写入record时，依赖的是length_字段，而不是'\0'来判定指针指向的数据的长度
+   */
   const char *data() const;
 
   int      length() const { return length_; }
@@ -114,12 +123,23 @@ public:
   float  get_float() const;
   string get_string() const;
   bool   get_boolean() const;
-
+  const vector<float>& get_vector() const;
 
   /***
    *用来获取内部的数据指针
    */
   const char* get_char_data();
+
+  /***
+   * @brief 将向量数据转换为一个float*的指针指向的连续float数组，用来存储向量的值，注意，第1个float存储的是向量的长度，数据从第二个元素开始
+   */
+  static float* convertVectorToFloatPointer(const std::vector<float>& vec);
+
+  /***
+   * @brief 将float*的指针指向的连续float数组转换为vector<float>类型,注意，float*中的第一个元素会被当做向量的长度，数据从第二个元素开始
+   * @param vec 存放转换结果的vector
+   */
+  static void convertFloatPointerToVector(const float* data, vector<float>& vec);
 
 private:
   void set_int(int val);
@@ -143,6 +163,16 @@ private:
     bool    bool_value_;
     char   *pointer_value_;
   } value_ = {.int_value_ = 0};
+
+  //向量类型的值，注意，在实际存储时，存储空间的前4个字节，存储的是向量的长度(虽然长度是整数，但是为了方便处理指针的类型，这里使用float)
+  //也就是实际存储长度 = （1 + vector_val_.size()）*4
+  //convertVectorToFloatPointer实现了上述转换功能，而convertFloatPointerToVector实现了上述转换的逆过程
+  std::vector<float> vector_val_;
+
+  /***
+   * @brief 获取向量在存储时占用的字节数，在存储时，存储空间的前4个字节，存储的是向量的长度，(虽然长度是整数，但是为了方便处理指针的类型，这里使用float)
+   */
+  static int get_vector_store_size(const vector<float>& vec) {return (1 + (int)vec.size())*sizeof(float);  }
 
   /// 是否申请并占有内存, 目前对于 CHARS 类型 own_data_ 为true, 其余类型 own_data_ 为false
   bool own_data_ = false;

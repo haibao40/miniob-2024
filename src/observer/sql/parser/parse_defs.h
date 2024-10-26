@@ -153,6 +153,24 @@ struct AttrInfoSqlNode
   size_t      length;  ///< Length of attribute
   bool        not_null;///< not null限制，等于true时，表示该字段不允许设置null值
   bool        visible = true; ///< 是否可见，等于true时，表示该字段是可见的，否则不可见,是系统隐藏字段
+
+  /***
+   * @brief 设置char 类型的存储长度
+   * @param user_len 用户定义的长度
+   */
+  void set_char_type_length(int user_len)
+  {
+    length = user_len;
+  }
+
+  /***
+   * @brief 设置vector 类型的存储长度, 开始的4个字节存储的是vector的长度，所以是user_len+1
+   * @param user_len 用户定义的长度
+   */
+  void set_vector_type_length(int user_len)
+  {
+    length = (user_len+1)*sizeof(float);
+  }
 };
 
 /**

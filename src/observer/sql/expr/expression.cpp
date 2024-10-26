@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
 #include <stack>
+#include <cmath>
 #include <common/type/null_type.h>
 
 using namespace std;
@@ -799,4 +800,87 @@ RC AggregateExpr::type_from_string(const char *type_str, AggregateExpr::Type &ty
     rc = RC::INVALID_ARGUMENT;
   }
   return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+VectorFunctionExpr::VectorFunctionExpr(VECTOR_FUNCTION type, Expression *left, Expression *right)
+    : vector_function_type_(type), left_(left), right_(right)
+{
+}
+VectorFunctionExpr::VectorFunctionExpr(VECTOR_FUNCTION type, unique_ptr<Expression> left, unique_ptr<Expression> right)
+    : vector_function_type_(type), left_(std::move(left)), right_(std::move(right))
+{}
+
+bool VectorFunctionExpr::equal(const Expression &other) const
+{
+  if (this == &other) {
+    return true;
+  }
+  if (type() != other.type()) {
+    return false;
+  }
+  auto &vector_function_expr = static_cast<const VectorFunctionExpr &>(other);
+  return vector_function_type_ == vector_function_expr.vector_function_type() && left_->equal(*vector_function_expr.left_) &&
+         right_->equal(*vector_function_expr.right_);
+}
+
+ExprType VectorFunctionExpr::type() const
+{
+  return ExprType::VECTOR_FUNCTION;
+}
+
+AttrType VectorFunctionExpr::value_type() const
+{
+  return AttrType::FLOATS;  //向量函数运算的结果是一个浮点数
+}
+
+int VectorFunctionExpr::value_length() const
+{
+  return sizeof(float);     //向量函数运算的结果是一个浮点数
+};
+
+float VectorFunctionExpr::l2_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector)
+{
+    float sum = 0.0;
+    for (size_t i = 0; i < left_vector.size(); ++i) {
+        float diff = left_vector[i] - right_vector[i];
+        sum += diff * diff;
+    }
+    return std::sqrt(sum);
+}
+
+float VectorFunctionExpr::cosine_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector)
+{
+    float dot_product = 0;
+    float norm_left = 0;
+    float norm_right = 0;
+
+    for (size_t i = 0; i < left_vector.size(); ++i) {
+        dot_product += left_vector[i] * right_vector[i];
+        norm_left += left_vector[i] * left_vector[i];
+        norm_right += right_vector[i] * right_vector[i];
+    }
+
+    norm_left = std::sqrt(norm_left);
+    norm_right = std::sqrt(norm_right);
+
+    if (norm_left == 0.0 || norm_right == 0.0) {
+        return 1.0; // 如果任一向量的范数为0，余弦距离为1
+    }
+
+    float cosine_similarity = dot_product / (norm_left * norm_right);
+    return 1.0f - cosine_similarity;
+}
+
+float VectorFunctionExpr::inner_product(const std::vector<float>& left_vector, const std::vector<float>& right_vector) {
+    float result = 0.0f;
+    for (size_t i = 0; i < left_vector.size(); ++i) {
+        result += left_vector[i] * right_vector[i];
+    }
+    return result;
+}
+
+RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_value, Value &value) const
+{
+
 }

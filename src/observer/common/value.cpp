@@ -129,6 +129,11 @@ void Value::set_data(char *data, int length)
       value_.int_value_  = *(int *)data;
       length_            = length;
     } break;
+    case AttrType::VECTORS: {
+      float* vec_data = reinterpret_cast<float *> (data);
+      convertFloatPointerToVector(vec_data, vector_val_);
+      length_ = get_vector_store_size(vector_val_);
+    } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -156,6 +161,14 @@ void Value::set_boolean(bool val)
   attr_type_         = AttrType::BOOLEANS;
   value_.bool_value_ = val;
   length_            = sizeof(val);
+}
+
+void Value::set_vector(const vector<float>& vector)
+{
+  reset();
+  attr_type_ = AttrType::VECTORS;
+  vector_val_ = vector;
+  length_ = get_vector_store_size(vector_val_);
 }
 
 void Value::set_null()
@@ -234,9 +247,31 @@ const char *Value::data() const
     case AttrType::CHARS: {
       return value_.pointer_value_;
     } break;
+    case AttrType::VECTORS: {
+      return reinterpret_cast<char*> (convertVectorToFloatPointer(vector_val_));
+    } break;
     default: {
       return (const char *)&value_;
     } break;
+  }
+}
+
+float* Value::convertVectorToFloatPointer(const std::vector<float>& vec) {
+  size_t total_size = (vec.size() + 1) * sizeof(float);
+  float* data = new float[total_size];  //TODO:数据必须用过之后，才能释放，谁负责释放内存？先放一放，后面如果过不了，再改
+  data[0] = static_cast<float>(vec.size());
+  for (size_t i = 0; i < vec.size(); ++i) {
+    data[i + 1] = vec[i];
+  }
+  return data;
+}
+
+void Value::convertFloatPointerToVector(const float* data, vector<float>& vec) {
+  // 第一个位置存放的是向量中的元素个数
+  size_t num_elements = static_cast<size_t>(data[0]);
+  vec.resize(num_elements);
+  for (size_t i = 0; i < num_elements; ++i) {
+    vec[i] = data[i + 1];
   }
 }
 
@@ -348,6 +383,11 @@ bool Value::get_boolean() const
     }
   }
   return false;
+}
+
+const vector<float>& Value::get_vector() const
+{
+  return vector_val_;
 }
 
 const char* Value::get_char_data()
