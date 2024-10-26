@@ -140,7 +140,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
     return rc;
   }
-  
+
   if (group_by_oper) {
     if (*last_oper) {
       group_by_oper->add_child(std::move(*last_oper));
@@ -148,7 +148,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
     last_oper = &group_by_oper;
   }
-  
+
   unique_ptr<LogicalOperator> order_by_oper; //李晓鹏笔记 将逻辑计划加入到逻辑计划树形结构里面 在视图下面 在group by 上面
   rc = create_order_by_plan(select_stmt, order_by_oper);
   if (OB_FAIL(rc)) {
@@ -162,7 +162,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &order_by_oper;
   }
 
-  
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
   if (*last_oper) {
     project_oper->add_child(std::move(*last_oper));
@@ -177,60 +176,98 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
   RC                                  rc = RC::SUCCESS;
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
-  for (const FilterUnit *filter_unit : filter_units) {
+  for (FilterUnit *filter_unit : filter_units) {
     const FilterObj &filter_obj_left  = filter_unit->left();
     const FilterObj &filter_obj_right = filter_unit->right();
 
-    unique_ptr<Expression> left(filter_obj_left.is_attr
+    if(filter_obj_left.is_expr || filter_obj_right.is_expr){
+      if(filter_obj_left.is_expr == false){
+        unique_ptr<Expression> left(filter_obj_left.is_attr
                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
                                     : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+        unique_ptr<Expression> right(std::move(filter_unit->right().expr));
+        if((filter_obj_left.is_attr && filter_obj_left.field.attr_type() == AttrType::DATES) || (!filter_obj_left.is_attr && filter_obj_left.value.attr_type() == AttrType::DATES)){
+          auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
+          if(right_to_left_cost < INT32_MAX ){
+            ExprType right_type = right->type();
+            auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
+            if (right_type == ExprType::VALUE) {
+              Value right_val;
+              if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
+              {
+                LOG_WARN("failed to get value from right child", strrc(rc));
+                return rc;
+              }
+              right = make_unique<ValueExpr>(right_val);
+            } else {
+              right = std::move(cast_expr);
+            }
 
-    unique_ptr<Expression> right(filter_obj_right.is_attr
-                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
-                                     : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
-
-    //by haijun:官方原本的代码，只要两边类型不同就会转换，这里我添加了额外的判断，只有在两边类型不同，并且都不是NULL，才进行类型转换
-    if (left->value_type() != right->value_type() && left->value_type() != AttrType::NULLS && right->value_type() != AttrType::NULLS) {
-      auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
-      auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
-      if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {
-        ExprType left_type = left->type();
-        auto cast_expr = make_unique<CastExpr>(std::move(left), right->value_type());
-        if (left_type == ExprType::VALUE) {
-          Value left_val;
-          if (OB_FAIL(rc = cast_expr->try_get_value(left_val)))
-          {
-            LOG_WARN("failed to get value from left child", strrc(rc));
-            return rc;
           }
-          left = make_unique<ValueExpr>(left_val);
-        } else {
-          left = std::move(cast_expr);
         }
-      } else if (right_to_left_cost < left_to_right_cost && right_to_left_cost != INT32_MAX) {
-        ExprType right_type = right->type();
-        auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
-        if (right_type == ExprType::VALUE) {
-          Value right_val;
-          if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
-          {
-            LOG_WARN("failed to get value from right child", strrc(rc));
-            return rc;
-          }
-          right = make_unique<ValueExpr>(right_val);
-        } else {
-          right = std::move(cast_expr);
-        }
-
-      } else {
-        rc = RC::UNSUPPORTED;
-        LOG_WARN("unsupported cast from %s to %s", attr_type_to_string(left->value_type()), attr_type_to_string(right->value_type()));
-        return rc;
+        ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+        cmp_exprs.emplace_back(cmp_expr);
+      }else if(filter_obj_right.is_expr == false){
+        unique_ptr<Expression> right(filter_obj_right.is_attr
+                                      ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
+                                      : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+        ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(filter_unit->left().expr), std::move(right));
+        cmp_exprs.emplace_back(cmp_expr);
+      }else{
+        ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(filter_unit->left().expr), std::move(filter_unit->right().expr));
+        cmp_exprs.emplace_back(cmp_expr);
       }
+      //unique_ptr<Expression> left(std::move(filter_obj_left.expr));
+    }else{
+      unique_ptr<Expression> left(filter_obj_left.is_attr
+                                    ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
+                                    : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+      unique_ptr<Expression> right(filter_obj_right.is_attr
+                                      ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
+                                      : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+
+      if (left->value_type() != right->value_type()) {
+        auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
+        auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
+        if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {
+          ExprType left_type = left->type();
+          auto cast_expr = make_unique<CastExpr>(std::move(left), right->value_type());
+          if (left_type == ExprType::VALUE) {
+            Value left_val;
+            if (OB_FAIL(rc = cast_expr->try_get_value(left_val)))
+            {
+              LOG_WARN("failed to get value from left child", strrc(rc));
+              return rc;
+            }
+            left = make_unique<ValueExpr>(left_val);
+          } else {
+            left = std::move(cast_expr);
+          }
+        } else if (right_to_left_cost < left_to_right_cost && right_to_left_cost != INT32_MAX) {
+          ExprType right_type = right->type();
+          auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
+          if (right_type == ExprType::VALUE) {
+            Value right_val;
+            if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
+            {
+              LOG_WARN("failed to get value from right child", strrc(rc));
+              return rc;
+            }
+            right = make_unique<ValueExpr>(right_val);
+          } else {
+            right = std::move(cast_expr);
+          }
+
+        } else {
+          rc = RC::UNSUPPORTED;
+          LOG_WARN("unsupported cast from %s to %s", attr_type_to_string(left->value_type()), attr_type_to_string(right->value_type()));
+          return rc;
+        }
+      }
+      ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+      cmp_exprs.emplace_back(cmp_expr);
     }
 
-    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
-    cmp_exprs.emplace_back(cmp_expr);
   }
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
@@ -363,14 +400,14 @@ RC LogicalPlanGenerator::create_order_by_plan(SelectStmt *select_stmt, unique_pt
   vector<unique_ptr<Expression>> &order_by_expressions = select_stmt->order_by();
   if(order_by_expressions.empty()){
     logical_operator = NULL;
-    return RC::SUCCESS; 
+    return RC::SUCCESS;
   }
   // 这里应该先遍历一下，看看有没有未绑定的字段，如果有那么报错 不搞了
   // 如果这个物理计划需要其他的Expression 那么合并 不搞了
     auto order_by_oper = make_unique<OrderByLogicalOperator>(std::move(order_by_expressions)); //李晓鹏笔记 没有这一行 logical_operator会更新不了
     logical_operator = std::move(order_by_oper);
     return RC::SUCCESS;
-  
+
 }
 RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {

@@ -96,6 +96,12 @@ public:
    */
   void set_null();
 
+  void int2float(){
+    int tmp = this->value_.int_value_;
+    float ftmp = (float)tmp;
+    this->set_float(ftmp);
+  }
+
   string to_string() const;
 
   int compare(const Value &other) const;

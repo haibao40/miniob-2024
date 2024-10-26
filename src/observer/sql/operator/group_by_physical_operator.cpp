@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 using namespace std;
 using namespace common;
 
+//拿到聚合表达式列表，以及各聚合表达式子表达式的列表
 GroupByPhysicalOperator::GroupByPhysicalOperator(vector<Expression *> &&expressions)
 {
   aggregate_expressions_ = std::move(expressions);
@@ -30,9 +31,10 @@ GroupByPhysicalOperator::GroupByPhysicalOperator(vector<Expression *> &&expressi
     Expression *child_expr     = aggregate_expr->child().get();
     ASSERT(child_expr != nullptr, "aggregate expression must have a child expression");
     value_expressions_.emplace_back(child_expr);
-  });
+  }); 
 }
 
+//根据聚合表达式列表生成聚合算子列表
 void GroupByPhysicalOperator::create_aggregator_list(AggregatorList &aggregator_list)
 {
   aggregator_list.clear();
@@ -43,6 +45,7 @@ void GroupByPhysicalOperator::create_aggregator_list(AggregatorList &aggregator_
   });
 }
 
+//算子列表里的第i个算子处理tuple的第i个值
 RC GroupByPhysicalOperator::aggregate(AggregatorList &aggregator_list, const Tuple &tuple)
 {
   ASSERT(static_cast<int>(aggregator_list.size()) == tuple.cell_num(), 
@@ -71,6 +74,7 @@ RC GroupByPhysicalOperator::aggregate(AggregatorList &aggregator_list, const Tup
   return rc;
 }
 
+//拿到每个算子的结果
 RC GroupByPhysicalOperator::evaluate(GroupValueType &group_value)
 {
   RC rc = RC::SUCCESS;
@@ -81,9 +85,9 @@ RC GroupByPhysicalOperator::evaluate(GroupValueType &group_value)
   }
 
   AggregatorList &aggregators           = get<0>(group_value);
-  CompositeTuple &composite_value_tuple = get<1>(group_value);
+  CompositeTuple &composite_value_tuple = get<1>(group_value);//每一个子节点都是一个分组的结果
 
-  ValueListTuple evaluated_tuple;
+  ValueListTuple evaluated_tuple;//用来放结果List
   vector<Value>  values;
   for (unique_ptr<Aggregator> &aggregator : aggregators) {
     Value value;

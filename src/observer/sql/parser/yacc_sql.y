@@ -36,7 +36,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
                                              const char *sql_string,
                                              YYLTYPE *llocp)
 {
-  ArithmeticExpr *expr = new ArithmeticExpr(type, left, right);
+  Value value(0);
+  ValueExpr *zero = new ValueExpr(value);
+  ArithmeticExpr *expr = type == ArithmeticExpr::Type::NEGATIVE ? new ArithmeticExpr(ArithmeticExpr::Type::SUB, zero, left) : new ArithmeticExpr(type, left, right);
   expr->set_name(token_name(sql_string, llocp));
   return expr;
 }
@@ -65,10 +67,10 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 
 //标识tokens
 %token  SEMICOLON
+        GROUP
         BY
         CREATE
         DROP
-        GROUP
         ORDER
         TABLE
         TABLES
@@ -118,8 +120,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         LIKE
         IS_     //后面加上_,用以区分枚举值IS
         NULL_T
-
-
+        MAX
+        MIN
+        AVG
+        SUM
+        COUNT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -559,7 +564,51 @@ expression:
     | '*' {
       $$ = new StarExpr();
     }
-    // your code here
+    | SUM LBRACE RBRACE {
+      $$ = create_aggregate_expression("SUM", nullptr, sql_string, &@$);
+    }
+    | MAX LBRACE RBRACE{
+      $$ = create_aggregate_expression("MAX", nullptr, sql_string, &@$);
+    }
+    | MIN LBRACE RBRACE{
+      $$ = create_aggregate_expression("MIN", nullptr, sql_string, &@$);
+    }
+    | AVG LBRACE RBRACE{
+      $$ = create_aggregate_expression("AVG", nullptr, sql_string, &@$);
+    }
+    | COUNT LBRACE RBRACE{
+      $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
+    }
+    | SUM LBRACE expression RBRACE{
+      $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
+    }
+    | MAX LBRACE expression RBRACE{
+      $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
+    }
+    | MIN LBRACE expression RBRACE{
+      $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
+    }
+    | AVG LBRACE expression RBRACE{
+      $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
+    }
+    | COUNT LBRACE expression RBRACE{
+      $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
+    }
+    | SUM LBRACE expression_list RBRACE {
+      $$ = create_aggregate_expression("SUM", nullptr, sql_string, &@$);
+    }
+    | MAX LBRACE expression_list RBRACE{
+      $$ = create_aggregate_expression("MAX", nullptr, sql_string, &@$);
+    }
+    | MIN LBRACE expression_list RBRACE{
+      $$ = create_aggregate_expression("MIN", nullptr, sql_string, &@$);
+    }
+    | AVG LBRACE expression_list RBRACE{
+      $$ = create_aggregate_expression("AVG", nullptr, sql_string, &@$);
+    }
+    | COUNT LBRACE expression_list RBRACE{
+      $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
+    }
     ;
 
 rel_attr:
@@ -720,6 +769,59 @@ condition:
       delete $1;
       delete $3;
     }
+    | expression comp_op value
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_expr = 1;
+      $$->left_expr = $1;
+      $$->right_is_attr = 0;
+      $$->right_value = *$3;
+      $$->comp = $2;
+
+      delete $3;
+    }
+    | value comp_op expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->right_is_expr = 1;
+      $$->right_expr = $3;
+      $$->comp = $2;
+
+      delete $1;
+    }
+    | expression comp_op rel_attr
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_expr = 1;
+      $$->left_expr = $1;
+      $$->right_is_attr = 1;
+      $$->right_attr = *$3;
+      $$->comp = $2;
+
+      delete $3;
+    }
+    | rel_attr comp_op expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->right_is_expr = 1;
+      $$->right_expr = $3;
+      $$->comp = $2;
+
+      delete $1;
+    }
+    | expression comp_op expression
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_expr = 1;
+      $$->left_expr = $1;
+      $$->right_is_expr = 1;
+      $$->right_expr = $3;
+      $$->comp = $2;
+    }
     ;
     
 comp_op:
@@ -735,12 +837,16 @@ comp_op:
     | IS_ NOT { $$ = IS_NOT ;}
     ;
 
-// your code here
-
 group_by:
     /* empty */
     {
       $$ = nullptr;
+    }
+    | GROUP BY expression_list
+    {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->swap(*$3);
+      delete $3;
     }
     ;
 load_data_stmt:

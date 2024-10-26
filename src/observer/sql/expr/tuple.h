@@ -349,6 +349,14 @@ public:
   void set_names(const std::vector<TupleCellSpec> &specs) { specs_ = specs; }
   void set_cells(const std::vector<Value> &cells) { cells_ = cells; }
 
+  static RC set_zero_cells(ValueListTuple &value_list, size_t n){
+    for(size_t i = 0; i < n; i++){
+      Value zero(0);
+      value_list.cells_.push_back(zero);
+    }
+    return RC::SUCCESS;
+  }
+
   virtual int cell_num() const override { return static_cast<int>(cells_.size()); }
 
   virtual RC cell_at(int index, Value &cell) const override
@@ -356,7 +364,7 @@ public:
     if (index < 0 || index >= cell_num()) {
       return RC::NOTFOUND;
     }
-
+    
     cell = cells_[index];
     return RC::SUCCESS;
   }

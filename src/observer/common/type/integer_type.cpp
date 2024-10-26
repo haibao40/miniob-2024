@@ -46,6 +46,13 @@ RC IntegerType::multiply(const Value &left, const Value &right, Value &result) c
   return RC::SUCCESS;
 }
 
+RC IntegerType::divide(const Value &left, const Value &right, Value &result) const
+{
+  result.set_int(left.get_int() / right.get_int());
+  return RC::SUCCESS;
+}
+
+
 RC IntegerType::negative(const Value &val, Value &result) const
 {
   result.set_int(-val.get_int());

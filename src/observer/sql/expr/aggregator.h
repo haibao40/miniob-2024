@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/value.h"
 #include "common/rc.h"
+#include <iostream>
 
 class Aggregator
 {
@@ -29,9 +30,36 @@ protected:
   Value value_;
 };
 
-class SumAggregator : public Aggregator
+class SumAggregator : public Aggregator //官方提供了sum的聚合算子,其余的都是仿写，具体进cpp文件查看
 {
 public:
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
+};
+
+class MaxAggregator : public Aggregator{ 
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+};
+
+class MinAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+};
+
+class AvgAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
+    void add_len() { len_++; }
+  private:
+    int len_=1;
+};
+
+class CountAggregator : public Aggregator{
+  public:
+    RC accumulate(const Value &value) override;
+    RC evaluate(Value &result) override;
 };
