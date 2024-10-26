@@ -186,7 +186,8 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
                                     : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
         unique_ptr<Expression> right(std::move(filter_unit->right().expr));
-        if((filter_obj_left.is_attr && filter_obj_left.field.attr_type() == AttrType::DATES) || (!filter_obj_left.is_attr && filter_obj_left.value.attr_type() == AttrType::DATES)){
+        if((filter_obj_left.is_attr && filter_obj_left.field.attr_type() == AttrType::DATES) ||
+          (!filter_obj_left.is_attr && filter_obj_left.value.attr_type() == AttrType::DATES)){
           auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
           if(right_to_left_cost < INT32_MAX ){
             ExprType right_type = right->type();

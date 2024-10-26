@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 //这里没有考虑value为null的情况，应该先确定value是否为null，如果是，直接返回success，什么都不干
 RC SumAggregator::accumulate(const Value &value)
 {
+  if(value.attr_type() == AttrType::NULLS) return RC::SUCCESS;
   //sum是官方提供的，这句的意思是，如果value_未被初始化，对应了第一次传入参数的情况，除了count以外，其他的都是直接把参数赋值给value_
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
@@ -46,6 +47,7 @@ RC SumAggregator::evaluate(Value& result)
 
 RC MaxAggregator::accumulate(const Value &value)
 {
+  if(value.attr_type() == AttrType::NULLS) return RC::SUCCESS;
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
     return RC::SUCCESS;
@@ -68,6 +70,7 @@ RC MaxAggregator::evaluate(Value &result)
 
 RC MinAggregator::accumulate(const Value& value)
 {
+  if(value.attr_type() == AttrType::NULLS) return RC::SUCCESS;
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
     return RC::SUCCESS;
@@ -90,6 +93,7 @@ RC MinAggregator::evaluate(Value &result)
 
 RC AvgAggregator::accumulate(const Value &value)
 {
+  if(value.attr_type() == AttrType::NULLS) return RC::SUCCESS;
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
     return RC::SUCCESS;
@@ -126,6 +130,7 @@ RC AvgAggregator::evaluate(Value &result)
 
 RC CountAggregator::accumulate(const Value &value)
 {
+  if(value.attr_type() == AttrType::NULLS) return RC::SUCCESS;
   if (value_.attr_type() == AttrType::UNDEFINED) {
     Value one(1);
     value_ = one;
