@@ -69,7 +69,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       values.push_back(value);
     }
     TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
-    int pos;
+    int pos = 1;
     for (int i = 0; i < row_tuple->cell_num(); ++i) {
       TupleCellSpec spec ;
       row_tuple->spec_at(i, spec);
