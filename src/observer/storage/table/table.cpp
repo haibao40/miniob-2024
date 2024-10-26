@@ -235,8 +235,12 @@ RC Table::update_record(Record &record, vector<Value> &values, const char* field
   // memcpy(record_data, record.data() + offset, record_size);
   // new_record.set_data_owner(record_data, record_size);
 
-  make_record(values.size(), values.data(), new_record);
+  rc = make_record(values.size(), values.data(), new_record);
 
+  //make_record失败，可能是values的值不合法，比如某些字段不能为null
+  if(OB_FAIL(rc)) {
+    return rc;
+  }
   rc = insert_record(new_record);
   
   if (OB_FAIL(rc)) {
