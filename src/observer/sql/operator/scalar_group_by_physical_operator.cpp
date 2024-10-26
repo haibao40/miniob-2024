@@ -85,7 +85,8 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
   // 得到最终聚合后的值
   if (group_value_) {
     rc = evaluate(*group_value_);
-  }else{
+  }else//啥也没有，但是也要拿结果
+  {
     AggregatorList aggregator_list;
     create_aggregator_list(aggregator_list);
 

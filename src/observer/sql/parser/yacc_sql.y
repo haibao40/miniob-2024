@@ -72,10 +72,10 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 
 //标识tokens
 %token  SEMICOLON
+        GROUP
         BY
         CREATE
         DROP
-        GROUP
         TABLE
         TABLES
         INDEX
@@ -778,11 +778,16 @@ comp_op:
     | NOT LIKE { $$ = NOT_LIKE_TO; }
     ;
 
-// your code here
 group_by:
     /* empty */
     {
       $$ = nullptr;
+    }
+    | GROUP BY expression_list
+    {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->swap(*$3);
+      delete $3;
     }
     ;
 load_data_stmt:

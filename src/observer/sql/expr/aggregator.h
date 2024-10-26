@@ -30,14 +30,14 @@ protected:
   Value value_;
 };
 
-class SumAggregator : public Aggregator
+class SumAggregator : public Aggregator //官方提供了sum的聚合算子,其余的都是仿写，具体进cpp文件查看
 {
 public:
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
 };
 
-class MaxAggregator : public Aggregator{
+class MaxAggregator : public Aggregator{ 
   public:
     RC accumulate(const Value &value) override;
     RC evaluate(Value &result) override;
@@ -62,7 +62,4 @@ class CountAggregator : public Aggregator{
   public:
     RC accumulate(const Value &value) override;
     RC evaluate(Value &result) override;
-  private:
-    int count=1;
-    bool flag = false;
 };

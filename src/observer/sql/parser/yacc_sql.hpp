@@ -55,10 +55,10 @@ extern int yydebug;
     YYerror = 256,                 /* error  */
     YYUNDEF = 257,                 /* "invalid token"  */
     SEMICOLON = 258,               /* SEMICOLON  */
-    BY = 259,                      /* BY  */
-    CREATE = 260,                  /* CREATE  */
-    DROP = 261,                    /* DROP  */
-    GROUP = 262,                   /* GROUP  */
+    GROUP = 259,                   /* GROUP  */
+    BY = 260,                      /* BY  */
+    CREATE = 261,                  /* CREATE  */
+    DROP = 262,                    /* DROP  */
     TABLE = 263,                   /* TABLE  */
     TABLES = 264,                  /* TABLES  */
     INDEX = 265,                   /* INDEX  */
