@@ -18,7 +18,6 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/memory.h"
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
-
 /**
  * @brief 属性的值
  * @ingroup DataType
@@ -32,6 +31,7 @@ public:
   friend class DataType;
   friend class IntegerType;
   friend class FloatType;
+  friend class DateType;
   friend class BooleanType;
   friend class CharType;
   friend class VectorType;
@@ -115,6 +115,10 @@ private:
   void set_float(float val);
   void set_string(const char *s, int len = 0);
   void set_string_from_other(const Value &other);
+  /***
+   *@brief 设置日期，将日期字符串转换为一个8位的整数，从高位到低位，分别是，4位年份，2位月份，2位日期
+   */
+  void set_date(int year, int month, int day);
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;

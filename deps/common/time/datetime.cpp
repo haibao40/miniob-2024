@@ -441,4 +441,25 @@ bool DateTime::is_valid_xml_datetime(const string &str)
   return true;
 }
 
+bool check_date(int year, int month, int day)
+{
+    // 定义每个月的最大天数
+    int days_in_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    // 检查年份、月份和日期是否有效
+    if (year <= 0 || year > 9999 || month < 1 || month > 12 || day < 1) {
+        return false;
+    }
+    // 检查是否是闰年
+    if (month == 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) {
+        days_in_month[2] = 29;
+    }
+    // 检查日期是否在有效范围内
+    if (day > days_in_month[month]) {
+        return false;
+    }
+    return true;
+}
+
+
+
 }  // namespace common

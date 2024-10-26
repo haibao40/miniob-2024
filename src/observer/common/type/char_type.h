@@ -26,6 +26,11 @@ public:
 
   int compare(const Value &left, const Value &right) const override;
 
+  /***
+   * @brief 将val 转换为 type类型，并将结果保存在result中，目前，只支持【字符串类型】-->【日期类型】的转换
+   * @left 待转换值，必须满足 val.attr_type_ == AttrType::CHARS
+   * @result 转换的结果
+   */
   RC cast_to(const Value &val, AttrType type, Value &result) const override;
 
   RC set_value_from_str(Value &val, const string &data) const override;

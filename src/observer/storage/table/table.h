@@ -55,6 +55,16 @@ public:
       span<const AttrInfoSqlNode> attributes, StorageFormat storage_format);
 
   /**
+   * 删除一个表
+   * @param path 元数据保存的文件(完整路径)
+   * @param name 表名
+   * @param base_dir 表数据存放的路径
+   * @param attribute_count 字段个数
+   * @param attributes 字段
+   */
+  RC drop(const char *path);
+
+  /**
    * 打开一个表
    * @param meta_file 保存表元数据的文件完整路径
    * @param base_dir 表所在的文件夹，表记录数据文件、索引数据文件存放位置
@@ -76,6 +86,7 @@ public:
    * @param record[in/out] 传入的数据包含具体的数据，插入成功会通过此字段返回RID
    */
   RC insert_record(Record &record);
+  RC update_record(Record &record, const char * field_name, const Value &value);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
   RC get_record(const RID &rid, Record &record);
