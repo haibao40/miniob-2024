@@ -37,8 +37,7 @@ RC SumAggregator::evaluate(Value& result)
 {
   //这里是自己加了一个判断，如果到取结果的时候，value_还是没有初始化，那就是0条记录,这里统一输出0,而不是输出为空
   if(value_.attr_type() == AttrType::UNDEFINED){
-    Value zero(0);
-    result = zero;
+    result.set_null();
     return RC::SUCCESS;
   }
   result = value_;
@@ -121,8 +120,7 @@ RC AvgAggregator::accumulate(const Value &value)
 RC AvgAggregator::evaluate(Value &result)
 {
   if(value_.attr_type() == AttrType::UNDEFINED){
-    Value zero(0);
-    result = zero;
+    result.set_null();
     return RC::SUCCESS;
   }
 
