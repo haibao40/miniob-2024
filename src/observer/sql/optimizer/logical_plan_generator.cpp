@@ -127,7 +127,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }else{
       unique_ptr<LogicalOperator> on_predicate_oper;
       //创建过滤算子，放在当前join算子的上面
-      RC RC_JOIN_ON_RC = create_plan(join_filters[on_predicate_oper_current], on_predicate_oper);
+      RC RC_JOIN_ON_RC = create_plan(join_filters[join_filters.size() - on_predicate_oper_current -1], on_predicate_oper);
       if (OB_FAIL(RC_JOIN_ON_RC)) {
           LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(RC_JOIN_ON_RC));
           return RC_JOIN_ON_RC;
@@ -140,6 +140,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
          on_predicate_oper->add_child(std::move(unique_ptr<LogicalOperator>(join_oper)));
          table_oper =std::move(on_predicate_oper);
       
+      }else{
+        table_oper = std::move(std::move(unique_ptr<LogicalOperator>(join_oper)));
       }
     }
     }
