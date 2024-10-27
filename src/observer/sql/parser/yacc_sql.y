@@ -125,6 +125,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         AVG
         SUM
         COUNT
+        HAVING
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -171,6 +172,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
+%type <condition_list>      having
 %type <expression_list>     order_by
 %type <expression>          order_by_field
 %type <expression_list>     order_by_field_list
@@ -478,7 +480,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by order_by
+    SELECT expression_list FROM rel_list where group_by having order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -499,9 +501,16 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($6 != nullptr) {
         $$->selection.group_by.swap(*$6);
         delete $6;
-      }if ($7 != nullptr) {
-        $$->selection.order_by.swap(*$7);
+      }
+      
+      if($7 != nullptr){
+        $$->selection.having.swap(*$7);
         delete $7;
+      }
+
+      if ($8 != nullptr) {
+        $$->selection.order_by.swap(*$8);
+        delete $8;
       }
     }
     ;
@@ -849,6 +858,20 @@ group_by:
       delete $3;
     }
     ;
+
+having:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | HAVING condition_list
+    {
+      $$ = new std::vector<ConditionSqlNode>;
+      $$->swap(*$2);
+      delete $2;
+    }
+    ;
+
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {

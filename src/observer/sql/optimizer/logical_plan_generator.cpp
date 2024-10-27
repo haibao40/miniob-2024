@@ -149,6 +149,24 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &group_by_oper;
   }
 
+  /*     这一段都是新加的having过滤算子    */
+  unique_ptr<LogicalOperator> having_predicate_oper;
+
+  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create having_predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (having_predicate_oper) {
+    if (*last_oper) {
+      having_predicate_oper->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &having_predicate_oper;
+  }
+  /*     这一段都是新加的having过滤算子    */
+
   unique_ptr<LogicalOperator> order_by_oper; //李晓鹏笔记 将逻辑计划加入到逻辑计划树形结构里面 在视图下面 在group by 上面
   rc = create_order_by_plan(select_stmt, order_by_oper);
   if (OB_FAIL(rc)) {
@@ -357,6 +375,11 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   vector<unique_ptr<Expression>> &group_by_expressions = select_stmt->group_by();
   vector<Expression *> aggregate_expressions;
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
+
+  //把having里的聚合表达式加到query_expressions里去
+  for(std::unique_ptr<Expression> &having_expression:select_stmt->having_expressions()){
+    query_expressions.emplace_back(std::move(having_expression));
+  }
   
   function<RC(std::unique_ptr<Expression>&)> collector = [&](unique_ptr<Expression> &expr) -> RC {
     RC rc = RC::SUCCESS;

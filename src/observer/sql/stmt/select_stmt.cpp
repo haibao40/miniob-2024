@@ -81,12 +81,37 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return rc;
     }
   }
+
+  vector<unique_ptr<Expression>> having_expressions;
+  for(ConditionSqlNode condition: select_sql.having){
+    //找到聚合表达式指针,讲其加入到having_expressions_中去,找到就给它绑定咯
+    if(condition.left_is_expr && condition.left_expr->type() == ExprType::AGGREGATION)
+    {
+      unique_ptr <Expression> having_expression(static_cast<Expression *>(condition.left_expr));
+      RC rc = expression_binder.bind_expression(having_expression, having_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind having_expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+    //左右都要找
+    if(condition.right_is_expr && condition.right_expr->type() == ExprType::AGGREGATION)
+    {
+      unique_ptr <Expression> having_expression(static_cast<Expression *>(condition.right_expr));
+      RC rc = expression_binder.bind_expression(having_expression, having_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind having_expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+  }
+
   // 李晓鹏笔记 select_sql_order_by 是解析出来后面的条件 
   vector<unique_ptr<Expression>> order_by_expressions;
     for (unique_ptr<Expression> &expression : select_sql.order_by) {
     RC rc = expression_binder.bind_expression(expression, order_by_expressions);
     if (OB_FAIL(rc)) {
-      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      LOG_INFO("bind order_by_expression failed. rc=%s", strrc(rc));
       return rc;
     }
   }
@@ -110,14 +135,29 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     return rc;
   }
 
+  //多加一个过滤stmt
+  FilterStmt *having_filter_stmt = nullptr;
+  rc                             = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      select_sql.having.data(),
+      static_cast<int>(select_sql.having.size()),
+      having_filter_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct having_filter stmt");
+    return rc;
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
 
   select_stmt->tables_.swap(tables);
   select_stmt->query_expressions_.swap(bound_expressions);
-  select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->filter_stmt_        = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
+  select_stmt->having_expressions_.swap(having_expressions);
+  select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->order_by_.swap(order_by_expressions);
-  stmt                      = select_stmt;
+  stmt                             = select_stmt;
   return RC::SUCCESS;
 }
