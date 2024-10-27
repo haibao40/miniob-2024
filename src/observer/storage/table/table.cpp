@@ -412,6 +412,10 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     LOG_WARN("filed is empty");
     return RC::EMPTY;
   }
+  if(field->len() < value.length()) {
+    LOG_WARN("传入value的存储长度，超过了字段元数据FieldMeta中定义的长度");
+    return RC::INVALID_ARGUMENT;
+  }
   size_t       copy_len = field->len();
   const size_t data_len = value.length();
   if (field->type() == AttrType::CHARS) {
