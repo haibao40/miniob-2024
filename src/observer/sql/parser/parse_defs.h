@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
 
 #include "common/value.h"
 
@@ -102,6 +103,9 @@ struct SelectSqlNode
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
   std::vector<std::unique_ptr<Expression>>  order_by;    /// order by 需要的东西
+  std::map<std::string,std::string>  alias_name; //别名到真实名字对应的map
+  std::map<std::string,std::string>  name_alias ;//真实名字到别名对应的map
+  std::vector<std::vector<ConditionSqlNode>*>  join_conditions; //join的条件 join后面都跟着很多条件
 };
 
 /**

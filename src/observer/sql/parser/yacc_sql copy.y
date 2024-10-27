@@ -52,10 +52,10 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   expr->set_name(token_name(sql_string, llocp));
   return expr;
 }
-
-std::vector<std::vector<ConditionSqlNode>*>  join_conditions; 
-
-
+std::map<std::string,std::string> alias_name_temp;
+std::map<std::string,std::string> name_alias_temp;
+std::vector<ConditionSqlNode>     join_conditions;
+std::vector<std::string>          join_relations;
 %}
 
 %define api.pure full
@@ -128,9 +128,9 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         AVG
         SUM
         COUNT
+        AS
         INNER
         JOIN
-        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -147,7 +147,6 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
-  std::vector<std::string> *                 join_in_lists;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -166,7 +165,6 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <value>               value
 %type <number>              number
 %type <string>              relation
-%type <join_in_lists>       join_in
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
@@ -176,7 +174,6 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <condition_list>      condition_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
-%type <join_in_lists>       join_in_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
@@ -512,7 +509,6 @@ select_stmt:        /*  select 语句的语法解析树*/
         $$->selection.order_by.swap(*$7);
         delete $7;
       }
-      $$->selection.join_conditions.swap(join_conditions);
     }
     ;
 calc_stmt:
@@ -534,6 +530,29 @@ expression_list:
     {
       if ($3 != nullptr) {
         $$ = $3;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+    }
+    | expression AS ID{
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+
+    }| expression ID{
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+    }| expression AS ID COMMA expression_list{
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+
+    }| expression  ID COMMA expression_list{
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
@@ -640,7 +659,23 @@ relation:
     ID {
       $$ = $1;
     }
+    |ID AS ID{
+      $$ = $1;
+    }
+    | ID ID{
+      $$ = $1;
+    }
+
     ;
+
+  join_{
+
+  }
+  | join_ INNER JOIN join_list {
+
+  }
+  ;
+   
 rel_list:
     relation {
       $$ = new std::vector<std::string>();
@@ -653,53 +688,32 @@ rel_list:
       } else {
         $$ = new std::vector<std::string>;
       }
-
-      $$->insert($$->begin(), $1);
+      $->insert($$->begin(), $1);
       free($1);
     }
-    | join_in_list{
-      if($$ == nullptr){
-        $$ = $1;
-      }else{
-        //$$->insert($$->begin(), $1);
-        $$ = $1;
-      }
+    | join_list {
+      $$ = new std::vector<std::string>();
+      $$->push_back($1);
+      free($1);
+    
     }
     ;
 
 
-join_in:
+join_:
   relation INNER JOIN relation ON condition_list{
-    $$ = new std::vector<std::string>();
-    join_conditions.push_back($6);
-    $$->push_back($1);
-    $$->push_back($4);
-    free($1);
-    free($4);
+
   }
   | relation INNER JOIN relation{
-    $$ = new std::vector<std::string>();
-    std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
-    join_conditions.push_back(temp);
-    $$->push_back($1);
-    $$->push_back($4);
   }
   ;
 
-join_in_list:
-  join_in{
-      $$ = $1 ;
-      //free($1);
+join_list:
+  join_{
+
   }
-  | join_in INNER JOIN join_in_list{
-    if ($4 != nullptr) {
-        $$ = $4;
-      } else {
-        $$ = new std::vector<std::string>;
-      }
-      $$->insert($$->begin(), $1->begin(),$1->end());
-     delete $1;
-    
+  | join_ INNER JOIN join_list{
+
   }
   ;
 
