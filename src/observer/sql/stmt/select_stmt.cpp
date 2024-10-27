@@ -109,6 +109,24 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
+  //处理on条件的 和上面的where是一样的 只是这里是个循环 有多个on条件
+  std::vector<std::vector<ConditionSqlNode>*>  join_conditions_sql_node = select_sql.join_conditions;
+  std::vector<FilterStmt*> join_filter;
+  for(std::vector<ConditionSqlNode>* &on_conditions_ptr : join_conditions_sql_node){
+     std::vector<ConditionSqlNode> on_conditions = *on_conditions_ptr;
+     FilterStmt * join_filter_stmt = nullptr;
+     RC          rc          = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      on_conditions.data(),
+      static_cast<int>(on_conditions.size()),
+      join_filter_stmt);
+      if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct filter stmt");
+    return rc;
+    }
+      join_filter.push_back(join_filter_stmt);
+  }
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
@@ -118,6 +136,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
   select_stmt->order_by_.swap(order_by_expressions);
+  select_stmt->join_filter_.swap(join_filter);
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }
