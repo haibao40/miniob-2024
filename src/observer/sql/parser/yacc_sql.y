@@ -147,7 +147,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
-  std::vector<std::string> *                 join_in_lists;
+  std::vector<std::string> *                 join_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -166,7 +166,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <value>               value
 %type <number>              number
 %type <string>              relation
-%type <join_in_lists>       join_in
+%type <join_list>           join_in
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
@@ -176,7 +176,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <condition_list>      condition_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
-%type <join_in_lists>       join_in_list
+%type <join_list>           join_in_right_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
@@ -657,7 +657,7 @@ rel_list:
       $$->insert($$->begin(), $1);
       free($1);
     }
-    | join_in_list{
+    | join_in{
       if($$ == nullptr){
         $$ = $1;
       }else{
@@ -668,38 +668,51 @@ rel_list:
     ;
 
 
-join_in:
-  relation INNER JOIN relation ON condition_list{
+join_in_right_list:
+    INNER JOIN relation ON condition_list{
     $$ = new std::vector<std::string>();
-    join_conditions.push_back($6);
-    $$->push_back($1);
-    $$->push_back($4);
-    free($1);
-    free($4);
+    join_conditions.push_back($5);
+    $$->push_back($3);
   }
-  | relation INNER JOIN relation{
+  | INNER JOIN  relation{
     $$ = new std::vector<std::string>();
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
     join_conditions.push_back(temp);
-    $$->push_back($1);
-    $$->push_back($4);
+    $$->push_back($3);
   }
-  ;
-
-join_in_list:
-  join_in{
-      $$ = $1 ;
-      //free($1);
-  }
-  | join_in INNER JOIN join_in_list{
+  | INNER JOIN  relation join_in_right_list{
+    std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
+    join_conditions.push_back(temp);
     if ($4 != nullptr) {
         $$ = $4;
       } else {
         $$ = new std::vector<std::string>;
       }
-      $$->insert($$->begin(), $1->begin(),$1->end());
-     delete $1;
-    
+      $$->insert($$->begin(), $3);
+      free($3);
+
+  }
+  | INNER JOIN relation ON condition_list join_in_right_list{
+    join_conditions.push_back($5);
+    if ($6 != nullptr) {
+        $$ = $6;
+      } else {
+        $$ = new std::vector<std::string>;
+      }
+      $$->insert($$->begin(), $3);
+      free($3);
+  }
+  ;
+
+join_in:
+  relation join_in_right_list{
+    if ($2 != nullptr) {
+      $$ = $2;
+    } else{
+      $$ = new std::vector<std::string>;
+    }
+    $$->insert($$->begin(), $1);
+    free($1);
   }
   ;
 
