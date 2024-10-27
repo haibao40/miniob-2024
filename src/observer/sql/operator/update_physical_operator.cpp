@@ -62,13 +62,27 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     Value valuetmp;
     vector<Value> values;
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    //从1开始，是因为第0个位置是空值列表
+    
+    //首先，先判断要更新的数据类型与原类型是否一致，空值则跳过判断
+    TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
+    rc = row_tuple->find_cell(tuplecellspec, valuetmp);
+    // if(rc != RC::SUCCESS ){
+    //   LOG_WARN("not find");
+    //   return rc;
+    // }
+    if(valuetmp.attr_type() != value_.attr_type() && value_.attr_type() != AttrType::NULLS){
+      LOG_WARN("type is not right");
+      return RC::NOT_EXIST;
+    }
+
+    //从1开始，是因为第0个位置是空值列表,这里把所有字段值保存起来
     for(int i = 1; i < row_tuple->cell_num(); i++) {
       Value value;
       row_tuple->cell_at(i, value);
       values.push_back(value);
     }
-    TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
+
+    //找到要更新的值的位置，在这里把它更新
     int pos = 1;
     for (int i = 0; i < row_tuple->cell_num(); ++i) {
       TupleCellSpec spec ;
@@ -78,16 +92,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         break;
       }
     }
-    values[pos - 1] = value_;
-    rc = row_tuple->find_cell(tuplecellspec, valuetmp);
-    if(rc != RC::SUCCESS ){
-      LOG_WARN("not find");
-      return rc;
-    }
-    if(valuetmp.attr_type() != value_.attr_type() && value_.attr_type() != AttrType::NULLS){
-      LOG_WARN("type is not right");
-      return RC::NOT_EXIST;
-    }
+    values[pos - 1] = value_; //更新value
+
     Record   &record    = row_tuple->record();
     records_.emplace_back(std::move(record));
     record_values.push_back(values);
@@ -97,9 +103,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   // 先收集记录再更新
   // 记录的有效性由事务来保证，如果事务不保证更新的有效性，那说明此事务类型不支持并发控制，比如VacuousTrx
-
   for (size_t i = 0; i < records_.size(); i++) {
-    // rc = trx_->update_record(table_, records_[i], field_name_.c_str(), value_);
     rc = trx_->update_record(table_, records_[i], record_values[i],field_name_.c_str(), value_);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to delete record: %s", strrc(rc));
