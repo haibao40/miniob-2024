@@ -93,6 +93,11 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
       ASSERT(false, "shouldn't be here");
     } break;
 
+    case ExprType::VECTOR_FUNCTION: {
+      // 目前,先将向量函数表达式的绑定，按照arithmetic处理，流程应该是完全一致的
+      return bind_arithmetic_expression(expr, bound_expressions);
+    }
+
     default: {
       LOG_WARN("unknown expression type: %d", static_cast<int>(expr->type()));
       return RC::INTERNAL;

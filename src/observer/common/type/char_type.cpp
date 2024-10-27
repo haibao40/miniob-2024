@@ -32,23 +32,17 @@ RC CharType::set_value_from_str(Value &val, const string &data) const
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   if(val.attr_type_ != AttrType::CHARS) return RC::INVALID_ARGUMENT;
+  RC rc = RC::SUCCESS;
   switch (type) {
-    case AttrType::DATES: {  //字符串类型可以转换为日期类型
-      int year, month, day;
-      if(sscanf(val.value_.pointer_value_, "%d-%d-%d", &year, &month, &day) != 3) {
-        LOG_WARN("日期字符串的格式不合法：%s", val.value_.pointer_value_);
-        return RC::INVALID_ARGUMENT;
-      }
-      bool is_valid = common::check_date(year,month, day);
-      if(!is_valid) {
-        LOG_WARN("日期不在合法的范围内:year=%d, month=%d, day=%d", year, month, day);
-        return RC::INVALID_ARGUMENT;
-      }
-      result.set_date(year, month, day);
+    case AttrType::DATES: {  //字符串类型可以转换为日期类型，如果日期不合法，会转换失败
+      rc = cast_char_to_date(val, result);
+    } break;
+    case AttrType::VECTORS: {  //字符串类型可以转换为向量类型
+      rc = cast_char_to_vector(val, result);
     } break;
     default: return RC::UNIMPLEMENTED;
   }
-  return RC::SUCCESS;
+  return rc;
 }
 
 int CharType::cast_cost(AttrType type)
@@ -60,6 +54,10 @@ int CharType::cast_cost(AttrType type)
   else if(type == AttrType::DATES) {
     return 1;
   }
+  //表示可以将字符串类型转换为向量类型，类型转换的代价为1
+  else if(type == AttrType::VECTORS) {
+    return 1;
+  }
   return INT32_MAX;
 }
 
@@ -68,5 +66,41 @@ RC CharType::to_string(const Value &val, string &result) const
   stringstream ss;
   ss << val.value_.pointer_value_;
   result = ss.str();
+  return RC::SUCCESS;
+}
+
+RC CharType::cast_char_to_date(const Value &val, Value &result)
+{
+  int year, month, day;
+  if(sscanf(val.value_.pointer_value_, "%d-%d-%d", &year, &month, &day) != 3) {
+    LOG_WARN("日期字符串的格式不合法：%s", val.value_.pointer_value_);
+    return RC::INVALID_ARGUMENT;
+  }
+  bool is_valid = common::check_date(year,month, day);
+  if(!is_valid) {
+    LOG_WARN("日期不在合法的范围内:year=%d, month=%d, day=%d", year, month, day);
+    return RC::INVALID_ARGUMENT;
+  }
+  result.set_date(year, month, day);
+  return RC::SUCCESS;
+}
+
+RC CharType::cast_char_to_vector(const Value &val, Value &result)
+{
+  //字符串中的数据格式为[1.5,2.3,3.3]， 指针val.value_.pointer_value_指向这个字符串
+  std::string str(val.value_.pointer_value_);
+  std::vector<float> vec;
+  std::stringstream ss(str.substr(1, str.size() - 2)); // 去掉首尾的方括号
+  float num;
+  char comma;
+  while (ss >> num) {
+    vec.push_back(num);
+    ss >> comma; // 读取逗号，如果有的话
+  }
+  if (ss.fail() && !ss.eof()) {
+    LOG_WARN("将字符串转换为向量时发生错误，字符串中存储的数据不能转换为向量");
+    return RC::INVALID_ARGUMENT  ; // 解析失败
+  }
+  result.set_vector(vec);
   return RC::SUCCESS;
 }

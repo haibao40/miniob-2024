@@ -41,6 +41,18 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   return expr;
 }
 
+VectorFunctionExpr *create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION type,
+                                             Expression *left,
+                                             Expression *right,
+                                             const char *sql_string,
+                                             YYLTYPE *llocp)
+{
+  VectorFunctionExpr *expr = new VectorFunctionExpr(type, left, right);
+  expr->set_name(token_name(sql_string, llocp));
+  return expr;
+}
+
+
 UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
                                            Expression *child,
                                            const char *sql_string,
@@ -117,6 +129,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         LIKE
         IS_     //后面加上_,用以区分枚举值IS
         NULL_T
+        LEFT_BRACKET     //左方括号[,用于支持使用列表表示向量
+        RIGHT_BRACKET    //右方括号],用于支持使用列表表示向量
+        L2_DISTANCE      //向量函数L2_DISTANCE
+        COSINE_DISTANCE  //向量函数COSINE_DISTANCE
+        INNER_PRODUCT    //向量函数INNER_PRODUCT
         
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -134,6 +151,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
+  std::vector<float> *                       float_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -159,6 +177,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
+%type <float_list>          float_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
 %type <expression>          expression
@@ -430,7 +449,34 @@ value:
       $$ = new Value();
       $$->set_null();
     }
+    | LEFT_BRACKET float_list RIGHT_BRACKET  /* 匹配[1,1.2,5]这种列表，这是向量的一种表示方式 */
+    {
+      printf("将列表解析为value");
+      $$ = new Value();
+      $$->set_vector(*$2);
+    }
     ;
+float_list:
+     /* empty*/
+    { $$ = nullptr;}
+    |
+    NUMBER
+    {
+      $$ = new std::vector<float>;
+      $$->push_back($1);
+    }
+    | NUMBER COMMA float_list
+    {
+      printf("解析到float_list");
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<float>;
+      }
+      $$->insert($$->begin(), $1);
+    }
+    ;
+
 storage_format:
     /* empty */
     {
@@ -540,6 +586,7 @@ expression:
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
     }
     | value {
+      printf("将value解析为ValueExpr");
       $$ = new ValueExpr(*$1);
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
@@ -552,6 +599,18 @@ expression:
     }
     | '*' {
       $$ = new StarExpr();
+    }
+    | L2_DISTANCE LBRACE expression COMMA expression RBRACE       /* l2_distance(vector A, vector B) */
+    {
+      $$ = create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION::L2_DISTANCE, $3, $5, sql_string, &@$);
+    }
+    | COSINE_DISTANCE LBRACE expression COMMA expression RBRACE   /* cosine_distance(vector A, vector B) */
+    {
+      $$ = create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION::COSINE_DISTANCE, $3, $5, sql_string, &@$);
+    }
+    | INNER_PRODUCT LBRACE expression COMMA expression RBRACE     /* inner_product(vector A, vector B) */
+    {
+      $$ = create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION::INNER_PRODUCT, $3, $5, sql_string, &@$);
     }
     // your code here
     ;

@@ -6,7 +6,7 @@
 
 int VectorType::compare(const Value &left, const Value &right) const
 {
-  ASSERT(right.attr_type() != AttrType::VECTORS || right.attr_type() != AttrType::VECTORS, "left or right type is not VECTORS");
+  ASSERT(right.attr_type() == AttrType::VECTORS || right.attr_type() == AttrType::VECTORS, "left or right type is not VECTORS");
   //参数不是向量类型
   if(right.attr_type() != AttrType::VECTORS || right.attr_type() != AttrType::VECTORS){
     LOG_ERROR("left or right type is not VECTORS, this is function for vector add");
@@ -37,7 +37,7 @@ RC VectorType::multiply(const Value &left, const Value &right, Value &result) co
 
 RC VectorType::to_string(const Value &val, string &result) const
 {
-  ASSERT(val.attr_type() != AttrType::VECTORS, "val type is not VECTORS");
+  ASSERT(val.attr_type() == AttrType::VECTORS, "val type is not VECTORS");
   if(val.attr_type() != AttrType::VECTORS){
     LOG_ERROR("val type is not VECTORS, this is function for VECTORS");
     return RC::INVALID_ARGUMENT;
@@ -58,14 +58,31 @@ RC VectorType::to_string(const Value &val, string &result) const
 
 
 RC VectorType::vector_arithmetic_operation(const Value &left, const Value &right, Value &result, ArithmeticOperation op){
-  ASSERT(right.attr_type() != AttrType::VECTORS || right.attr_type() != AttrType::VECTORS, "left or right type is not VECTORS");
-  //参数不是向量类型
-  if(right.attr_type() != AttrType::VECTORS || right.attr_type() != AttrType::VECTORS){
-    LOG_ERROR("left or right type is not VECTORS, this is function for vector add");
-    return RC::INVALID_ARGUMENT;
+  ASSERT(left.attr_type() == AttrType::VECTORS || right.attr_type() == AttrType::VECTORS, "left or right type is not VECTORS");
+  //进行类型转换，将不是vector类型的那个转换成vector类型
+  Value left_vector_value;
+  Value right_vector_value;
+  if(left.attr_type() != AttrType::VECTORS){
+    RC rc = Value::cast_to(left, AttrType::VECTORS, left_vector_value);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
   }
-  const vector<float> left_vector = left.get_vector();
-  const vector<float> right_vector = right.get_vector();
+  else{
+    left_vector_value = left;
+  }
+  if(right.attr_type() != AttrType::VECTORS){
+    RC rc = Value::cast_to(right, AttrType::VECTORS, right_vector_value);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+  }
+  else{
+    right_vector_value = right;
+  }
+
+  const vector<float> left_vector = left_vector_value.get_vector();
+  const vector<float> right_vector = right_vector_value.get_vector();
   //左右向量的长度不相等
   if(left_vector.size() != right_vector.size()){
     LOG_ERROR("left and right vector size is not equal, can not add them");

@@ -508,10 +508,14 @@ public:
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
-  RC get_column(Chunk &chunk, Column &column) override;
+  // 暂时不支持这个函数，等之后如果用到了再进行实现
+  // RC get_column(Chunk &chunk, Column &column) override;
 
   RC try_get_value(Value &value) const override;
 
+  /***
+   * @brief 获取向量函数表达式中，具体要执行的函数类型
+   */
   VECTOR_FUNCTION vector_function_type() const { return vector_function_type_; }
 
   std::unique_ptr<Expression> &left() { return left_; }
@@ -527,13 +531,14 @@ private:
 
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
 
-  RC calc_column(const Column &left_column, const Column &right_column, Column &column) const;
-
-  template <bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-  RC execute_calc(const Column &left, const Column &right, Column &result, VECTOR_FUNCTION type, AttrType attr_type) const;
+  // 暂时不支持这个函数，等之后如果用到了再进行实现
+  // RC calc_column(const Column &left_column, const Column &right_column, Column &column) const;
 
 private:
+  ///向量函数的类型
   VECTOR_FUNCTION  vector_function_type_;
+  ///向量函数的第一个向量参数
   std::unique_ptr<Expression> left_;
+  ///向量函数的第二个向量参数
   std::unique_ptr<Expression> right_;
 };
