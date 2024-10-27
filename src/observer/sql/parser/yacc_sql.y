@@ -459,15 +459,27 @@ value:
 float_list:
      /* empty*/
     { $$ = nullptr;}
-    |
-    NUMBER
+    | FLOAT
+    {
+      $$ = new std::vector<float>;
+      $$->push_back($1);
+    }
+    | NUMBER
     {
       $$ = new std::vector<float>;
       $$->push_back($1);
     }
     | NUMBER COMMA float_list
     {
-      printf("解析到float_list");
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<float>;
+      }
+      $$->insert($$->begin(), $1);
+    }
+    | FLOAT COMMA float_list
+    {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
