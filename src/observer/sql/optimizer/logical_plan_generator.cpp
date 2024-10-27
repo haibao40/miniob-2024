@@ -306,32 +306,18 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   FilterStmt    *filter_stmt  = update_stmt->filter_stmt();
   Value value = (update_stmt->value());
   
-  // LOG_DEBUG("update data: %d, field_name:%s", update_stmt->value().get_int(), field_name);
-  // if(update_stmt->value()->attr_type() )
-  
-  // vector<Value> values(update_stmt->value(), update_stmt->value() + 1);
-  vector<Value> values;
-  values.push_back(value);
+  // vector<Value> values;
+  // values.push_back(value);
 
   unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
-  unique_ptr<LogicalOperator> table_get_oper1(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
   unique_ptr<LogicalOperator> predicate_oper;
-  unique_ptr<LogicalOperator> predicate_oper1;
-  FilterStmt *filter_stmt1 = new FilterStmt();
 
   RC rc = create_plan(filter_stmt, predicate_oper);
   if (rc != RC::SUCCESS) {
     return rc;
   }
-  rc = create_plan(filter_stmt1, predicate_oper1);
-  if (rc != RC::SUCCESS) {
-    return rc;
-  }
-
 
   unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, field_name, value));
-  // unique_ptr<LogicalOperator> delete_oper(new DeleteLogicalOperator(table));
-  // unique_ptr<LogicalOperator> insert_oper(new InsertLogicalOperator(table, values));
  
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));
@@ -339,16 +325,7 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   } else {
     update_oper->add_child(std::move(table_get_oper));
   }
-  if (predicate_oper1) {
-    predicate_oper1->add_child(std::move(table_get_oper1));
-    update_oper->add_child(std::move(predicate_oper1)); 
-  } else {
-    update_oper->add_child(std::move(table_get_oper1));
-  }
-  // update_oper->add_child(std::move(delete_oper));
-  // update_oper->add_child(std::move(insert_oper));
 
-  // logical_operator.reset(update_operator);
   logical_operator = std::move(update_oper);
   return RC::SUCCESS;
 }
