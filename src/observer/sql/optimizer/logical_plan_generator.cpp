@@ -375,11 +375,12 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   vector<unique_ptr<Expression>> &group_by_expressions = select_stmt->group_by();
   vector<Expression *> aggregate_expressions;
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
+  vector<unique_ptr<Expression>> &having_expressions = select_stmt->having_expressions();
 
   //把having里的聚合表达式加到query_expressions里去
-  for(std::unique_ptr<Expression> &having_expression:select_stmt->having_expressions()){
-    query_expressions.emplace_back(std::move(having_expression));
-  }
+  // for(std::unique_ptr<Expression> &having_expression:select_stmt->having_expressions()){
+  //   query_expressions.emplace_back(std::move(having_expression));
+  // }
   
   function<RC(std::unique_ptr<Expression>&)> collector = [&](unique_ptr<Expression> &expr) -> RC {
     RC rc = RC::SUCCESS;
@@ -426,13 +427,22 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   for (unique_ptr<Expression> &expression : query_expressions) {
     bind_group_by_expr(expression);
   }
+  for (unique_ptr<Expression> &expression : having_expressions) {
+    bind_group_by_expr(expression);
+  }
 
   for (unique_ptr<Expression> &expression : query_expressions) {
+    find_unbound_column(expression);
+  }
+  for (unique_ptr<Expression> &expression : having_expressions) {
     find_unbound_column(expression);
   }
 
   // collect all aggregate expressions
   for (unique_ptr<Expression> &expression : query_expressions) {
+    collector(expression);
+  }
+  for (unique_ptr<Expression> &expression : having_expressions) {
     collector(expression);
   }
 

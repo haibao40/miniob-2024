@@ -85,9 +85,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   vector<unique_ptr<Expression>> having_expressions;
   for(ConditionSqlNode condition: select_sql.having){
     //找到聚合表达式指针,讲其加入到having_expressions_中去,找到就给它绑定咯
-    if(condition.left_is_expr && condition.left_expr->type() == ExprType::AGGREGATION)
+    if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_AGGREGATION)
     {
-      unique_ptr <Expression> having_expression(static_cast<Expression *>(condition.left_expr));
+      Expression * tmp = new UnboundAggregateExpr(dynamic_cast<UnboundAggregateExpr*>(condition.left_expr));
+      unique_ptr <Expression> having_expression(static_cast<Expression *>(tmp));
       RC rc = expression_binder.bind_expression(having_expression, having_expressions);
       if (OB_FAIL(rc)) {
         LOG_INFO("bind having_expression failed. rc=%s", strrc(rc));
@@ -95,9 +96,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       }
     }
     //左右都要找
-    if(condition.right_is_expr && condition.right_expr->type() == ExprType::AGGREGATION)
+    if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_AGGREGATION)
     {
-      unique_ptr <Expression> having_expression(static_cast<Expression *>(condition.right_expr));
+      Expression * tmp = new UnboundAggregateExpr(dynamic_cast<UnboundAggregateExpr*>(condition.right_expr));
+      unique_ptr <Expression> having_expression(static_cast<Expression *>(tmp));
       RC rc = expression_binder.bind_expression(having_expression, having_expressions);
       if (OB_FAIL(rc)) {
         LOG_INFO("bind having_expression failed. rc=%s", strrc(rc));
