@@ -932,12 +932,31 @@ RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_va
 {
   RC rc = RC::SUCCESS;
 
-  const AttrType target_type = value_type();
-  value.set_type(target_type);
+  //进行类型转换，将不是vector类型的转换成vector类型
+  Value left_vector_value;
+  Value right_vector_value;
+  if(left_value.attr_type() != AttrType::VECTORS){
+    RC rc = Value::cast_to(left_value, AttrType::VECTORS, left_vector_value);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+  }
+  else{
+    left_vector_value = left_value;
+  }
+  if(right_value.attr_type() != AttrType::VECTORS){
+    RC rc = Value::cast_to(right_value, AttrType::VECTORS, right_vector_value);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+  }
+  else{
+    right_vector_value = right_value;
+  }
+  //执行计算逻辑
   float result = 0;
-
-  auto vector_left = left_value.get_vector();
-  auto vector_right = left_value.get_vector();
+  auto vector_left = left_vector_value.get_vector();
+  auto vector_right = right_vector_value.get_vector();
   switch (vector_function_type_) {
     case VECTOR_FUNCTION::L2_DISTANCE: {
       result =  l2_distance(vector_left, vector_right);
@@ -956,6 +975,7 @@ RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_va
       LOG_WARN("unsupported VECTOR_FUNCTION type. %d", vector_function_type_);
     } break;
   }
+  value.set_type(AttrType::FLOATS);
   value.set_data((char *) &result, 4);
   return rc;
 }
