@@ -29,6 +29,8 @@ RC CharType::set_value_from_str(Value &val, const string &data) const
   return RC::SUCCESS;
 }
 
+
+
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   if(val.attr_type_ != AttrType::CHARS) return RC::INVALID_ARGUMENT;
@@ -49,13 +51,13 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
     case AttrType::INTS:{
       string stringValue = val.get_string();
       int number = 0;  
-    bool hasDigits = false;  
+      bool hasDigits = false;  
   
-    for (char ch : stringValue) {  
-        if (std::isdigit(static_cast<unsigned char>(ch))) {  
+      for (char ch : stringValue) {  
+          if (std::isdigit(static_cast<unsigned char>(ch))) {  
             number = number * 10 + (ch - '0');  
             hasDigits = true;  
-        } else {  
+        }else {  
             // 如果遇到非数字字符，停止扫描  
             if (hasDigits) {  
                 break;  
@@ -65,6 +67,38 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
     // 如果字符串不以数字字符开头，则返回 0  否则返回转化的Number
     result.set_int(hasDigits ? number : 0);
     }break;
+    case AttrType::FLOATS:{
+      string stringValue = val.get_string();
+      double number = 0.0;  
+      double decimalMultiplier = 0.1; // 用于累加小数点后的数字  
+      bool hasDigits = false;  
+      bool hasDecimal = false;  
+  
+    for (char ch : stringValue) {  
+        if (std::isdigit(static_cast<unsigned char>(ch))) {  
+            if (hasDecimal) {  
+                number += (ch - '0') * decimalMultiplier;  
+                decimalMultiplier *= 0.1; // 移动到下一个小数位  
+            } else {  
+                number = number * 10.0 + (ch - '0');  
+            }  
+            hasDigits = true;  
+        } else if (ch == '.') {  
+            if (hasDecimal) { // 如果已经遇到了小数点，则忽略后续的小数点  
+                break;  
+            }  
+            hasDecimal = true;  
+        } else {  
+            // 如果遇到非数字字符且已经遇到了数字，则停止扫描  
+            if (hasDigits) {  
+                break;  
+            }  
+        }  
+    }  
+  
+    // 如果没有遇到任何数字字符，则返回0  
+    result.set_float(hasDigits ? number : 0.0);  
+    }break ;
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -78,7 +112,7 @@ int CharType::cast_cost(AttrType type)
   //表示可以将字符串类型转换为日期类型，类型转换的代价为1（代价理解为转换过程中的性能消耗）
   else if(type == AttrType::DATES) {
     return 1;
-  }else if(type == AttrType::INTS){ //表示可以将字符串转化为int 转化的代价为1
+  }else if(type == AttrType::INTS || type == AttrType::FLOATS){ //表示可以将字符串转化为int 转化的代价为1
     return 1 ;
   }
   return INT32_MAX;
