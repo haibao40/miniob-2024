@@ -52,10 +52,8 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
             number = number * 10 + (ch - '0');  
             hasDigits = true;  
         }else {  
-            // 如果遇到非数字字符，停止扫描  
-            if (hasDigits) {  
-                break;  
-            }  
+          // 如果遇到非数字字符，停止扫描  
+          break;   
         }  
     }  
     // 如果字符串不以数字字符开头，则返回 0  否则返回转化的Number
