@@ -142,9 +142,9 @@ RC CountAggregator::accumulate(const Value &value)
     value_ = one;
     return RC::SUCCESS;
   }
-  
-  ASSERT(value.attr_type() == value_.attr_type(), "type mismatch. value type: %s, value_.type: %s", 
-        attr_type_to_string(value.attr_type()), attr_type_to_string(value_.attr_type()));
+  //这里注释掉是因为count不需要关注value的类型,反正都是+1
+  // ASSERT(value.attr_type() == value_.attr_type(), "type mismatch. value type: %s, value_.type: %s", 
+  //       attr_type_to_string(value.attr_type()), attr_type_to_string(value_.attr_type()));
   
   Value one(1);
   Value::add(one, value_, value_);

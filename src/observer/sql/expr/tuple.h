@@ -202,6 +202,19 @@ public:
     }
   }
 
+  /***
+   * @brief 针对tuple当前管理的record对象，修改指定字段的值，
+   *        注意，此时，该record.owner_属性应该为true，即表示当前record指向的内存，应该是由record对象自己管理的，而不是指向bufferPool中的Frame,
+   *        bufferPool中的Frame内存需要使用其它的对象进行更新，以确保更新后的数据能够被写入磁盘
+   * @param index 要更新的是用户表中的第几个字段，从0开始
+   * @param new_value 要更新成的新数据
+   */
+  // RC set_record_field(int index, const Value &new_value)
+  // {
+  //   int real_index = table_->table_meta().sys_field_num() + index;
+  //   return RC::UNIMPLEMENTED;
+  // }
+
   int cell_num() const override { return speces_.size(); }
 
   RC cell_at(int index, Value &cell) const override
@@ -268,6 +281,17 @@ public:
   Record &record() { return *record_; }
 
   const Record &record() const { return *record_; }
+
+private:
+  /***
+   * @brief 根据字段是在用户表中的第几个字段，计算该字段是在record中的第几个字段
+   * @param index 表示是用户表中的第几个字段，从0开始
+   * @return 考虑前面的事务字段个数 + 空值列表，返回该字段是record中的第几个字段
+   */
+  // int get_index_in_record(int index)
+  // {
+  //   return 0;
+  // }
 
 private:
   Record                  *record_ = nullptr;
