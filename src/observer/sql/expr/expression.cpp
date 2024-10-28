@@ -746,8 +746,28 @@ RC ArithmeticExpr::try_get_value(Value &value) const
 ////////////////////////////////////////////////////////////////////////////////
 
 UnboundAggregateExpr::UnboundAggregateExpr(const char *aggregate_name, Expression *child)
-    : aggregate_name_(aggregate_name), child_(child)
-{}
+    : aggregate_name_(aggregate_name)
+{
+  if(child == nullptr){
+    child_ = nullptr;
+    copy_child_ = nullptr;
+    return ;
+  }
+  if(child->type() == ExprType::UNBOUND_FIELD){
+    Expression* copied = new UnboundFieldExpr(*dynamic_cast<UnboundFieldExpr*>(child)); 
+    copy_child_ =  std::unique_ptr<Expression> (copied);
+  }else if(child->type() == ExprType::STAR){
+    Expression* copied = new StarExpr(*dynamic_cast<StarExpr*>(child)); 
+    copy_child_ =  std::unique_ptr<Expression> (copied);
+  }
+  child_ =  std::unique_ptr<Expression>(child);
+}
+
+UnboundAggregateExpr::UnboundAggregateExpr(UnboundAggregateExpr * expr){
+  this->set_name(expr->name());
+  this->aggregate_name_ = expr->aggregate_name();
+  this->child_ = std::move(expr->copy_child());
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 AggregateExpr::AggregateExpr(Type type, Expression *child) : aggregate_type_(type), child_(child) {}
