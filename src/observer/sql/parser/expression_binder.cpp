@@ -93,10 +93,16 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
       // ASSERT(false, "shouldn't be here");
       return bind_aggregate_expression(expr, bound_expressions);
     } break;
-    case ExprType::UnboundORderedFieldExpr:{ 
+    case ExprType::UnboundORderedFieldExpr:{
        // 李晓鹏笔记 此处解析order by 的内容
        return bind_unbound_order_field_expression(expr, bound_expressions);
     }break;
+
+    case ExprType::VECTOR_FUNCTION: {
+      // 目前,先将向量函数表达式的绑定，按照arithmetic处理，流程应该是完全一致的
+      return bind_arithmetic_expression(expr, bound_expressions);
+    }
+
     default: {
       LOG_WARN("unknown expression type: %d", static_cast<int>(expr->type()));
       return RC::INTERNAL;
