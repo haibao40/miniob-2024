@@ -64,7 +64,7 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
     }  
     // 如果字符串不以数字字符开头，则返回 0  否则返回转化的Number
     result.set_int(hasDigits ? number : 0);
-    }
+    }break;
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
