@@ -46,6 +46,26 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       }
       result.set_date(year, month, day);
     } break;
+    case AttrType::INTS:{
+      string stringValue = val.get_string();
+      int number = 0;  
+    bool hasDigits = false;  
+  
+    for (char ch : stringValue) {  
+        if (std::isdigit(static_cast<unsigned char>(ch))) {  
+            number = number * 10 + (ch - '0');  
+            hasDigits = true;  
+        } else {  
+            // 如果遇到非数字字符，停止扫描  
+            if (hasDigits) {  
+                break;  
+            }  
+        }  
+    }  
+  
+    // 如果字符串不以数字字符开头，则返回 0  否则返回转化的Number
+    result.set_int(hasDigits ? number : 0);
+    }
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -59,6 +79,8 @@ int CharType::cast_cost(AttrType type)
   //表示可以将字符串类型转换为日期类型，类型转换的代价为1（代价理解为转换过程中的性能消耗）
   else if(type == AttrType::DATES) {
     return 1;
+  }else if(type == AttrType::INTS){ //表示可以将字符串转化为int 转化的代价为1
+    return 1 ;
   }
   return INT32_MAX;
 }
