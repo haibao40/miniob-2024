@@ -209,10 +209,11 @@ public:
    * @param index 要更新的是用户表中的第几个字段，从0开始
    * @param new_value 要更新成的新数据
    */
-  RC set_record_field(int index, const Value &new_value)
-  {
-    int real_index = table_->table_meta().sys_field_num() + index;
-  }
+  // RC set_record_field(int index, const Value &new_value)
+  // {
+  //   int real_index = table_->table_meta().sys_field_num() + index;
+  //   return RC::UNIMPLEMENTED;
+  // }
 
   int cell_num() const override { return speces_.size(); }
 
@@ -287,10 +288,10 @@ private:
    * @param index 表示是用户表中的第几个字段，从0开始
    * @return 考虑前面的事务字段个数 + 空值列表，返回该字段是record中的第几个字段
    */
-  int get_index_in_record(int index)
-  {
-
-  }
+  // int get_index_in_record(int index)
+  // {
+  //   return 0;
+  // }
 
 private:
   Record                  *record_ = nullptr;
