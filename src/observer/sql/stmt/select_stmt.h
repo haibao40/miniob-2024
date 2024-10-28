@@ -50,7 +50,7 @@ public:
   std::vector<std::unique_ptr<Expression>> &having_expressions() {return having_expressions_;}
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
   std::vector<std::unique_ptr<Expression>> &order_by() { return order_by_; }
-
+  std::vector<FilterStmt*>   &join_filter(){return join_filter_; }
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<Table *>                     tables_;
@@ -59,4 +59,5 @@ private:
   std::vector<std::unique_ptr<Expression>> having_expressions_;
   FilterStmt                              *having_filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> order_by_;
+  std::vector<FilterStmt*> join_filter_;
 };

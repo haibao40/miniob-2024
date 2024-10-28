@@ -105,8 +105,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   last_oper = &table_oper;
 
   const std::vector<Table *> &tables = select_stmt->tables();
-  for (Table *table : tables) {
-
+  if(select_stmt->join_filter().size() == 0){ //这是原来的多表查询逻辑,没有使用join 这里有更好的方案
+    for (Table *table : tables) {
     unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
     if (table_oper == nullptr) {
       table_oper = std::move(table_get_oper);
@@ -117,7 +117,37 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       table_oper = unique_ptr<LogicalOperator>(join_oper);
     }
   }
+  }else{
+    int on_predicate_oper_current = 0;
+    std::vector<FilterStmt*> join_filters = select_stmt->join_filter();
+    for (Table *table : tables) {
+    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+    if (table_oper == nullptr) {
+      table_oper = std::move(table_get_oper);
+    }else{
+      unique_ptr<LogicalOperator> on_predicate_oper;
+      //创建过滤算子，放在当前join算子的上面
+      RC RC_JOIN_ON_RC = create_plan(join_filters[join_filters.size() - on_predicate_oper_current -1], on_predicate_oper);
+      if (OB_FAIL(RC_JOIN_ON_RC)) {
+          LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(RC_JOIN_ON_RC));
+          return RC_JOIN_ON_RC;
+      }
+      on_predicate_oper_current++;
+      LogicalOperator* join_oper = new JoinLogicalOperator;
+      join_oper->add_child(std::move(table_oper));
+      join_oper->add_child(std::move(table_get_oper));
+      if(on_predicate_oper){
+         on_predicate_oper->add_child(std::move(unique_ptr<LogicalOperator>(join_oper)));
+         table_oper =std::move(on_predicate_oper);
+      
+      }else{
+        table_oper = std::move(std::move(unique_ptr<LogicalOperator>(join_oper)));
+      }
+    }
+    }
 
+
+  }
   unique_ptr<LogicalOperator> predicate_oper;
 
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);

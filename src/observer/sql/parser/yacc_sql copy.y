@@ -52,10 +52,10 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   expr->set_name(token_name(sql_string, llocp));
   return expr;
 }
-
-std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
-
-
+std::map<std::string,std::string> alias_name_temp;
+std::map<std::string,std::string> name_alias_temp;
+std::vector<ConditionSqlNode>     join_conditions;
+std::vector<std::string>          join_relations;
 %}
 
 %define api.pure full
@@ -128,10 +128,9 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         AVG
         SUM
         COUNT
-        HAVING
+        AS
         INNER
         JOIN
-        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -148,7 +147,6 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
-  std::vector<std::string> *                 join_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -167,7 +165,6 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <value>               value
 %type <number>              number
 %type <string>              relation
-%type <join_list>           join_in
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
@@ -177,11 +174,9 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <condition_list>      condition_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
-%type <join_list>           join_in_right_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <expression_list>     group_by
-%type <condition_list>      having
 %type <expression_list>     order_by
 %type <expression>          order_by_field
 %type <expression_list>     order_by_field_list
@@ -489,7 +484,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by having order_by
+    SELECT expression_list FROM rel_list where group_by order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -510,18 +505,10 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($6 != nullptr) {
         $$->selection.group_by.swap(*$6);
         delete $6;
-      }
-
-      if($7 != nullptr){
-        $$->selection.having.swap(*$7);
+      }if ($7 != nullptr) {
+        $$->selection.order_by.swap(*$7);
         delete $7;
       }
-
-      if ($8 != nullptr) {
-        $$->selection.order_by.swap(*$8);
-        delete $8;
-      }
-      $$->selection.join_conditions.swap(join_conditions);
     }
     ;
 calc_stmt:
@@ -543,6 +530,29 @@ expression_list:
     {
       if ($3 != nullptr) {
         $$ = $3;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+    }
+    | expression AS ID{
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+
+    }| expression ID{
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+    }| expression AS ID COMMA expression_list{
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+
+    }| expression  ID COMMA expression_list{
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
@@ -649,7 +659,23 @@ relation:
     ID {
       $$ = $1;
     }
+    |ID AS ID{
+      $$ = $1;
+    }
+    | ID ID{
+      $$ = $1;
+    }
+
     ;
+
+  join_{
+
+  }
+  | join_ INNER JOIN join_list {
+
+  }
+  ;
+   
 rel_list:
     relation {
       $$ = new std::vector<std::string>();
@@ -662,66 +688,32 @@ rel_list:
       } else {
         $$ = new std::vector<std::string>;
       }
-
-      $$->insert($$->begin(), $1);
+      $->insert($$->begin(), $1);
       free($1);
     }
-    | join_in{
-      if($$ == nullptr){
-        $$ = $1;
-      }else{
-        //$$->insert($$->begin(), $1);
-        $$ = $1;
-      }
+    | join_list {
+      $$ = new std::vector<std::string>();
+      $$->push_back($1);
+      free($1);
+    
     }
     ;
 
 
-join_in_right_list:
-    INNER JOIN relation ON condition_list{
-    $$ = new std::vector<std::string>();
-    join_conditions.push_back($5);
-    $$->push_back($3);
-  }
-  | INNER JOIN  relation{
-    $$ = new std::vector<std::string>();
-    std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
-    join_conditions.push_back(temp);
-    $$->push_back($3);
-  }
-  | INNER JOIN  relation join_in_right_list{
-    std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
-    join_conditions.push_back(temp);
-    if ($4 != nullptr) {
-        $$ = $4;
-      } else {
-        $$ = new std::vector<std::string>;
-      }
-      $$->insert($$->begin(), $3);
-      free($3);
+join_:
+  relation INNER JOIN relation ON condition_list{
 
   }
-  | INNER JOIN relation ON condition_list join_in_right_list{
-    join_conditions.push_back($5);
-    if ($6 != nullptr) {
-        $$ = $6;
-      } else {
-        $$ = new std::vector<std::string>;
-      }
-      $$->insert($$->begin(), $3);
-      free($3);
+  | relation INNER JOIN relation{
   }
   ;
 
-join_in:
-  relation join_in_right_list{
-    if ($2 != nullptr) {
-      $$ = $2;
-    } else{
-      $$ = new std::vector<std::string>;
-    }
-    $$->insert($$->begin(), $1);
-    free($1);
+join_list:
+  join_{
+
+  }
+  | join_ INNER JOIN join_list{
+
   }
   ;
 
@@ -927,20 +919,6 @@ group_by:
       delete $3;
     }
     ;
-
-having:
-    /* empty */
-    {
-      $$ = nullptr;
-    }
-    | HAVING condition_list
-    {
-      $$ = new std::vector<ConditionSqlNode>;
-      $$->swap(*$2);
-      delete $2;
-    }
-    ;
-
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {
