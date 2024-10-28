@@ -143,6 +143,9 @@ public:
         return rc;
       }
 
+      //group by的特例，null和null算一组的
+      if(this_value.attr_type() == AttrType::NULLS && other_value.attr_type() == AttrType::NULLS)
+        continue;
       result = this_value.compare(other_value);
       if (0 != result) {
         return rc;
