@@ -51,6 +51,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   trx_ = trx;
 
+  vector<vector<Value> > record_values;
   while (OB_SUCC(rc = child->next())) {
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
@@ -59,46 +60,51 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     }
 
     Value valuetmp;
+    vector<Value> values;
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+    
+    //首先，先判断要更新的数据类型与原类型是否一致，空值则跳过判断
     TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
     rc = row_tuple->find_cell(tuplecellspec, valuetmp);
-    if(rc != RC::SUCCESS ){
-      LOG_WARN("not find");
-      return rc;
-    }
-    if(valuetmp.attr_type() != value_.attr_type()){
+    // if(rc != RC::SUCCESS ){
+    //   LOG_WARN("not find");
+    //   return rc;
+    // }
+    if(valuetmp.attr_type() != value_.attr_type() && value_.attr_type() != AttrType::NULLS){
       LOG_WARN("type is not right");
       return RC::NOT_EXIST;
     }
+
+    //从1开始，是因为第0个位置是空值列表,这里把所有字段值保存起来
+    for(int i = 1; i < row_tuple->cell_num(); i++) {
+      Value value;
+      row_tuple->cell_at(i, value);
+      values.push_back(value);
+    }
+
+    //找到要更新的值的位置，在这里把它更新
+    int pos = 1;
+    for (int i = 0; i < row_tuple->cell_num(); ++i) {
+      TupleCellSpec spec ;
+      row_tuple->spec_at(i, spec);
+      if(spec.field_name() == field_name_) {
+        pos = i;
+        break;
+      }
+    }
+    values[pos - 1] = value_; //更新value
+
     Record   &record    = row_tuple->record();
     records_.emplace_back(std::move(record));
+    record_values.push_back(values);
   }
 
-  // while (OB_SUCC(rc = child1->next())) {
-  //   LOG_DEBUG("in");
-  //   Tuple *tuple = child1->current_tuple();
-  //   if (nullptr == tuple) {
-  //     LOG_WARN("failed to get current record: %s", strrc(rc));
-  //     return rc;
-  //   }
-
-  //   Value valuetmp;
-  //   RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-  //   TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
-  //   rc = row_tuple->find_cell(tuplecellspec, valuetmp);
-  //   if(rc != RC::SUCCESS ){
-  //     LOG_WARN("not find");
-  //     return rc;
-  //   }
-  // }
-
   child->close();
-  // child1->close();
+
   // 先收集记录再更新
   // 记录的有效性由事务来保证，如果事务不保证更新的有效性，那说明此事务类型不支持并发控制，比如VacuousTrx
-  LOG_DEBUG("field_name:%s, value:%s", field_name_.c_str(), value_.to_string().c_str());
-  for (Record &record : records_) {
-    rc = trx_->update_record(table_, record, field_name_.c_str(), value_);
+  for (size_t i = 0; i < records_.size(); i++) {
+    rc = trx_->update_record(table_, records_[i], record_values[i],field_name_.c_str(), value_);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to delete record: %s", strrc(rc));
       return rc;

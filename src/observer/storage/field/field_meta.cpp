@@ -25,16 +25,17 @@ const static Json::StaticString FIELD_OFFSET("offset");
 const static Json::StaticString FIELD_LEN("len");
 const static Json::StaticString FIELD_VISIBLE("visible");
 const static Json::StaticString FIELD_FIELD_ID("FIELD_id");
+const static Json::StaticString FIELD_NOT_NULL("NOT_NULL");
 
-FieldMeta::FieldMeta() : attr_type_(AttrType::UNDEFINED), attr_offset_(-1), attr_len_(0), visible_(false), field_id_(0) {}
+FieldMeta::FieldMeta() : attr_type_(AttrType::UNDEFINED), attr_offset_(-1), attr_len_(0), visible_(false), field_id_(0), not_null_(false) {}
 
-FieldMeta::FieldMeta(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id)
+FieldMeta::FieldMeta(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id, bool not_null)
 {
-  [[maybe_unused]] RC rc = this->init(name, attr_type, attr_offset, attr_len, visible, field_id);
+  [[maybe_unused]] RC rc = this->init(name, attr_type, attr_offset, attr_len, visible, field_id, not_null);
   ASSERT(rc == RC::SUCCESS, "failed to init field meta. rc=%s", strrc(rc));
 }
 
-RC FieldMeta::init(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id)
+RC FieldMeta::init(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, int field_id, bool not_null)
 {
   if (common::is_blank(name)) {
     LOG_WARN("Name cannot be empty");
@@ -53,6 +54,7 @@ RC FieldMeta::init(const char *name, AttrType attr_type, int attr_offset, int at
   attr_offset_ = attr_offset;
   visible_     = visible;
   field_id_ = field_id;
+  not_null_ = not_null;
 
   LOG_INFO("Init a field with name=%s", name);
   return RC::SUCCESS;
@@ -70,10 +72,12 @@ bool FieldMeta::visible() const { return visible_; }
 
 int FieldMeta::field_id() const { return field_id_; }
 
+bool FieldMeta::not_null() const { return not_null_; }
+
 void FieldMeta::desc(std::ostream &os) const
 {
   os << "field name=" << name_ << ", type=" << attr_type_to_string(attr_type_) << ", len=" << attr_len_
-     << ", visible=" << (visible_ ? "yes" : "no");
+     << ", visible=" << (visible_ ? "yes" : "no") << ", not_null=" << (not_null_ ? "true" : "false");
 }
 
 void FieldMeta::to_json(Json::Value &json_value) const
@@ -84,7 +88,11 @@ void FieldMeta::to_json(Json::Value &json_value) const
   json_value[FIELD_LEN]     = attr_len_;
   json_value[FIELD_VISIBLE] = visible_;
   json_value[FIELD_FIELD_ID] = field_id_;
+  json_value[FIELD_NOT_NULL] = not_null_;
 }
+
+//这里设置了null_value_list_field使用的字段名，后面加了点东西，方便debug遇到这里的错误的时候，知道这是谁写的
+const std::string FieldMeta::null_value_list_field_name = "null_value_list:define by haijun";
 
 RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
 {
@@ -99,6 +107,7 @@ RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
   const Json::Value &len_value     = json_value[FIELD_LEN];
   const Json::Value &visible_value = json_value[FIELD_VISIBLE];
   const Json::Value &field_id_value = json_value[FIELD_FIELD_ID];
+  const Json::Value &not_null_val = json_value[FIELD_NOT_NULL];
 
   if (!name_value.isString()) {
     LOG_ERROR("Field name is not a string. json value=%s", name_value.toStyledString().c_str());
@@ -125,6 +134,15 @@ RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
     LOG_ERROR("Field id is not an integer. json value=%s", field_id_value.toStyledString().c_str());
     return RC::INTERNAL;
   }
+  if (!not_null_val.isBool()) {
+    LOG_ERROR("not_null field is not a bool value. json value=%s", not_null_val.toStyledString().c_str());
+    return RC::INTERNAL;
+  }
+  //TODO:由于暂时没有在存储层实现not_null，先暂时不检查
+  // if (!not_null_val.isBool()) {
+  //   LOG_ERROR("not_null field is not a bool value. json value=%s", not_null_val.toStyledString().c_str());
+  //   return RC::INTERNAL;
+  // }
 
   AttrType type = attr_type_from_string(type_value.asCString());
   if (AttrType::UNDEFINED == type) {
@@ -137,5 +155,10 @@ RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
   int         len     = len_value.asInt();
   bool        visible = visible_value.asBool();
   int         field_id  = field_id_value.asInt();
-  return field.init(name, type, offset, len, visible, field_id);
+  bool        not_null = false;
+  //TODO:由于暂时没有在存储层实现not_null，如果没有，就不赋值，默认为false
+  if(not_null_val.isBool()) {
+    not_null = not_null_val.asBool();
+  }
+  return field.init(name, type, offset, len, visible, field_id, not_null);
 }

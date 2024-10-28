@@ -39,14 +39,17 @@ enum class ExprType
   STAR,                 ///< 星号，表示所有字段
   UNBOUND_FIELD,        ///< 未绑定的字段，需要在resolver阶段解析为FieldExpr
   UNBOUND_AGGREGATION,  ///< 未绑定的聚合函数，需要在resolver阶段解析为AggregateExpr
-
+  UnboundORderedFieldExpr, //李晓鹏 未绑定的排序，需要在resolver阶段解析为AggregateExpr
+  ORderedFieldExpr,   //用于排序的Expr
   FIELD,        ///< 字段。在实际执行时，根据行数据内容提取对应字段的值
   VALUE,        ///< 常量值
   CAST,         ///< 需要做类型转换的表达式
   COMPARISON,   ///< 需要做比较的表达式
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
+  VECTOR_FUNCTION, ///< 向量函数运算
   AGGREGATION,  ///< 聚合运算
+
 };
 
 /**
@@ -310,6 +313,11 @@ public:
   RC compare_column(const Column &left, const Column &right, std::vector<uint8_t> &result) const;
 
 private:
+  /***
+   * @brief is运算符
+   */
+  RC is(const Value &left, const Value &right, bool &value) const;
+private:
   CompOp                      comp_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
@@ -409,6 +417,7 @@ class UnboundAggregateExpr : public Expression
 {
 public:
   UnboundAggregateExpr(const char *aggregate_name, Expression *child);
+  UnboundAggregateExpr(UnboundAggregateExpr * expr);
   virtual ~UnboundAggregateExpr() = default;
 
   ExprType type() const override { return ExprType::UNBOUND_AGGREGATION; }
@@ -416,6 +425,7 @@ public:
   const char *aggregate_name() const { return aggregate_name_.c_str(); }
 
   std::unique_ptr<Expression> &child() { return child_; }
+  std::unique_ptr<Expression> &copy_child() { return copy_child_; }
 
   RC       get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
   AttrType value_type() const override { return child_->value_type(); }
@@ -423,6 +433,7 @@ public:
 private:
   std::string                 aggregate_name_;
   std::unique_ptr<Expression> child_;
+  std::unique_ptr<Expression> copy_child_;
 };
 
 class AggregateExpr : public Expression
@@ -467,4 +478,98 @@ public:
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
+};
+
+
+class UnboundORderedFieldExpr: public UnboundFieldExpr
+{
+    public:
+      bool asc ;
+     ExprType type() const override { return ExprType::UnboundORderedFieldExpr; }
+    UnboundORderedFieldExpr(const std::string &table_name, const std::string &field_name, const bool &asc_)
+          : UnboundFieldExpr(table_name, field_name), asc(asc_) {
+          // 构造函数体可以为空，因为所有初始化已经在初始化列表中完成
+      }
+    bool get_asc() const { return asc; }
+};
+
+
+class ORderedFieldExpr : public FieldExpr
+{
+public:
+  ExprType type() const override { return ExprType::ORderedFieldExpr; }
+  bool asc;
+  ORderedFieldExpr(const Table *table, const FieldMeta *field, const bool asc_) : FieldExpr(table, field), asc(asc_) {}
+  ORderedFieldExpr(const Field &field,const bool asc_) : FieldExpr(field), asc(asc_) {}
+  bool get_asc() const { return asc; }
+
+
+};
+
+/***
+ *@brief 定义向量函数表达式，用于支持向量数据的函数运算
+ */
+class VectorFunctionExpr : public Expression
+{
+public:
+  ///定义向量函数表达式支持的函数操作,函数具体的运算规则，查看文档：https://oceanbase.github.io/miniob/game/miniob-vectordb/
+  enum class VECTOR_FUNCTION
+  {
+    L2_DISTANCE,
+    COSINE_DISTANCE,
+    INNER_PRODUCT
+  };
+
+  /***
+   * @brief 构造函数，注意，左右表达式的计算结果，必须是向量类型，且维度相同，目前，两个构造函数中没有做任何的检查，但是错误的参数会导致执行的时候出错
+   */
+  VectorFunctionExpr(VECTOR_FUNCTION type, Expression *left, Expression *right);
+  VectorFunctionExpr(VECTOR_FUNCTION type, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
+  virtual ~VectorFunctionExpr() = default;
+
+  /***
+   * @brief 比较两个表达式是否相等，copy了ArithmeticExpr中的实现
+   */
+  bool     equal(const Expression &other) const override;
+  ExprType type() const override;
+
+  AttrType value_type() const override;
+
+  int value_length() const override;
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  // 暂时不支持这个函数，等之后如果用到了再进行实现
+  // RC get_column(Chunk &chunk, Column &column) override;
+
+  RC try_get_value(Value &value) const override;
+
+  /***
+   * @brief 获取向量函数表达式中，具体要执行的函数类型
+   */
+  VECTOR_FUNCTION vector_function_type() const { return vector_function_type_; }
+
+  std::unique_ptr<Expression> &left() { return left_; }
+  std::unique_ptr<Expression> &right() { return right_; }
+
+private:
+  /// L2距离
+  static float l2_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector);
+  /// 余弦距离
+  static float cosine_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector);
+  /// 内积
+  static float inner_product(const std::vector<float>& left_vector, const std::vector<float>& right_vector);
+
+  RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
+
+  // 暂时不支持这个函数，等之后如果用到了再进行实现
+  // RC calc_column(const Column &left_column, const Column &right_column, Column &column) const;
+
+private:
+  ///向量函数的类型
+  VECTOR_FUNCTION  vector_function_type_;
+  ///向量函数的第一个向量参数
+  std::unique_ptr<Expression> left_;
+  ///向量函数的第二个向量参数
+  std::unique_ptr<Expression> right_;
 };

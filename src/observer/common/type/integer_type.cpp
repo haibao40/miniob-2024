@@ -46,6 +46,13 @@ RC IntegerType::multiply(const Value &left, const Value &right, Value &result) c
   return RC::SUCCESS;
 }
 
+RC IntegerType::divide(const Value &left, const Value &right, Value &result) const
+{
+  result.set_int(left.get_int() / right.get_int());
+  return RC::SUCCESS;
+}
+
+
 RC IntegerType::negative(const Value &val, Value &result) const
 {
   result.set_int(-val.get_int());
@@ -73,5 +80,31 @@ RC IntegerType::to_string(const Value &val, string &result) const
   stringstream ss;
   ss << val.value_.int_value_;
   result = ss.str();
+  return RC::SUCCESS;
+}
+
+int IntegerType::cast_cost(AttrType type)
+{
+  if (type == AttrType::INTS) {
+    return 0;
+  }
+  else if(type == AttrType::FLOATS) {
+    return 1;
+  }
+  return INT32_MAX;
+}
+
+RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  if(val.attr_type() != AttrType::INTS) return RC::INVALID_ARGUMENT;
+  switch (type) {
+    case AttrType::FLOATS: { 
+      int i =  val.get_int();
+      float res = (float)i;
+      Value value(res);
+      result = value;
+    } break;
+    default: return RC::UNIMPLEMENTED;
+  }
   return RC::SUCCESS;
 }

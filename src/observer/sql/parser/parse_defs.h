@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
 
 #include "common/value.h"
 
@@ -53,6 +54,8 @@ enum CompOp
   GREAT_THAN, ///< ">"
   LIKE_TO,   //不能加在NO_OP后面 否则报错 filter_stmt.cpp 文件的88行，当然也不能写在equal_to前面
   NOT_LIKE_TO,
+  IS,
+  IS_NOT,
   NO_OP,
   
 };
@@ -67,12 +70,16 @@ enum CompOp
  */
 struct ConditionSqlNode
 {
-  int left_is_attr;              ///< TRUE if left-hand side is an attribute
+  int            left_is_expr=0;
+  int            left_is_attr;              ///< TRUE if left-hand side is an attribute
                                  ///< 1时，操作符左边是属性名，0时，是属性值
   Value          left_value;     ///< left-hand side value if left_is_attr = FALSE
   RelAttrSqlNode left_attr;      ///< left-hand side attribute
+  Expression *left_expr=nullptr;
   CompOp         comp;           ///< comparison operator
+  int            right_is_expr=0;
   int            right_is_attr;  ///< TRUE if right-hand side is an attribute
+  Expression *right_expr=nullptr;
                                  ///< 1时，操作符右边是属性名，0时，是属性值
   RelAttrSqlNode right_attr;     ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
@@ -95,6 +102,11 @@ struct SelectSqlNode
   std::vector<std::string>                 relations;    ///< 查询的表
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
+  std::vector<ConditionSqlNode>            having;   ///< 查询条件，使用AND串联起来多个条件
+  std::vector<std::unique_ptr<Expression>>  order_by;    /// order by 需要的东西
+  std::map<std::string,std::string>  alias_name; //别名到真实名字对应的map
+  std::map<std::string,std::string>  name_alias ;//真实名字到别名对应的map
+  std::vector<std::vector<ConditionSqlNode>*>  join_conditions; //join的条件 join后面都跟着很多条件
 };
 
 /**
@@ -149,6 +161,26 @@ struct AttrInfoSqlNode
   AttrType    type;    ///< Type of attribute
   std::string name;    ///< Attribute name
   size_t      length;  ///< Length of attribute
+  bool        not_null;///< not null限制，等于true时，表示该字段不允许设置null值
+  bool        visible = true; ///< 是否可见，等于true时，表示该字段是可见的，否则不可见,是系统隐藏字段
+
+  /***
+   * @brief 设置char 类型的存储长度
+   * @param user_len 用户定义的长度
+   */
+  void set_char_type_length(int user_len)
+  {
+    length = user_len;
+  }
+
+  /***
+   * @brief 设置vector 类型的存储长度, 开始的4个字节存储的是vector的长度，所以是user_len+1
+   * @param user_len 用户定义的长度
+   */
+  void set_vector_type_length(int user_len)
+  {
+    length = (user_len+1)*sizeof(float);
+  }
 };
 
 /**

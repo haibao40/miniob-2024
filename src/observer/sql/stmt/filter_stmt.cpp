@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "sql/parser/expression_binder.h"
 
 FilterStmt::~FilterStmt()
 {
@@ -91,7 +92,24 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   filter_unit = new FilterUnit;
 
-  if (condition.left_is_attr) {
+  if(condition.left_is_expr){
+    FilterObj filter_obj(condition.left_expr);
+
+    BinderContext binder_context;
+    for(const auto &name_table :*tables){
+      Table* table = name_table.second;
+      binder_context.add_table(table);
+    }
+    vector<unique_ptr<Expression>> bound_expressions;
+    ExpressionBinder expression_binder(binder_context);
+
+    RC rc = expression_binder.bind_expression(filter_obj.expr, bound_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
+    filter_unit->set_left(std::move(bound_expressions[0]));
+  } else if (condition.left_is_attr) {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
     rc                     = get_table_and_field(db, default_table, tables, condition.left_attr, table, field);
@@ -101,14 +119,31 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     FilterObj filter_obj;
     filter_obj.init_attr(Field(table, field));
-    filter_unit->set_left(filter_obj);
+    filter_unit->set_left(std::move(filter_obj));
   } else {
     FilterObj filter_obj;
     filter_obj.init_value(condition.left_value);
-    filter_unit->set_left(filter_obj);
+    filter_unit->set_left(std::move(filter_obj));
   }
 
-  if (condition.right_is_attr) {
+  if(condition.right_is_expr){
+    FilterObj filter_obj(condition.right_expr);
+
+    BinderContext binder_context;
+    for(const auto &name_table :*tables){
+      Table* table = name_table.second;
+      binder_context.add_table(table);
+    }
+    vector<unique_ptr<Expression>> bound_expressions;
+    ExpressionBinder expression_binder(binder_context);
+
+    RC rc = expression_binder.bind_expression(filter_obj.expr, bound_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
+    filter_unit->set_right(std::move(bound_expressions[0]));
+  } else if (condition.right_is_attr) {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;
     rc                     = get_table_and_field(db, default_table, tables, condition.right_attr, table, field);
@@ -118,11 +153,11 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     }
     FilterObj filter_obj;
     filter_obj.init_attr(Field(table, field));
-    filter_unit->set_right(filter_obj);
+    filter_unit->set_right(std::move(filter_obj));
   } else {
     FilterObj filter_obj;
     filter_obj.init_value(condition.right_value);
-    filter_unit->set_right(filter_obj);
+    filter_unit->set_right(std::move(filter_obj));
   }
 
   filter_unit->set_comp(comp);

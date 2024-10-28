@@ -15,7 +15,10 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include "sql/expr/aggregator.h"
 #include <stack>
+#include <cmath>
+#include <common/type/null_type.h>
 
 using namespace std;
 
@@ -122,8 +125,28 @@ ComparisonExpr::~ComparisonExpr() {}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
-  int cmp_result = left.compare(right);
   result         = false;
+
+  //TODO:将和null值相关的各种比较运算，提取出一个函数，避免这里代码太长太乱
+  //对于某些在comp_op_list中的比较类型，如果待比较的值中，包含了null_type类型的value，在这里单独处理
+  std::vector<CompOp> comp_op_list = {EQUAL_TO, LESS_EQUAL, NOT_EQUAL, LESS_THAN, GREAT_EQUAL, GREAT_THAN};
+  if(std::find(comp_op_list.begin(), comp_op_list.end(), comp_) != comp_op_list.end()) {
+    if(left.attr_type() == AttrType::NULLS) {
+      result = NullType().compare_with_null_type(left, right);
+      return rc;
+    }
+    if(right.attr_type() == AttrType::NULLS) {
+      result = NullType().compare_with_null_type(left, right);
+      return rc;
+    }
+  }
+
+  int cmp_result = 0;
+  //只有在左右都不是null的情况下，才执行这个比较运算
+  if(left.attr_type() != AttrType::NULLS && right.attr_type() != AttrType::NULLS) {
+    cmp_result = left.compare(right);
+  }
+
   switch (comp_) {
     case EQUAL_TO: {
       result = (0 == cmp_result);
@@ -148,6 +171,13 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     }break;
     case NOT_LIKE_TO:{
       rc = (like_value(left, right,result));
+      result = !result;
+    }break;
+    case IS: {
+      rc = is(left, right, result);
+    }break;
+    case IS_NOT:{
+      rc = is(left, right, result);
       result = !result;
     }break;
     default: {
@@ -323,6 +353,22 @@ RC ComparisonExpr::like_value(const Value &left, const Value &right, bool &resul
   }
   return rc;
 }
+
+
+RC ComparisonExpr::is(const Value &left, const Value &right, bool &value) const
+{
+  value = false;
+  if(left.attr_type() == right.attr_type()) {
+    if(left.attr_type() == AttrType::NULLS) { //sql中，null=null返回的是false，因此null_type的is运算不能依靠比较函数
+      value = true;
+    }
+    else {
+      value = (left.compare(right) == 0);   //比较函数返回0，表示相等
+    }
+  }
+  return RC::SUCCESS;
+}
+
 RC ComparisonExpr::try_get_value(Value &cell) const
 {
   if (left_->type() == ExprType::VALUE && right_->type() == ExprType::VALUE) {
@@ -350,11 +396,19 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   Value right_value;
 
   RC rc = left_->get_value(tuple, left_value);
+  if(rc == RC::DIVIDE_ZERO){
+    value.set_boolean(false);
+    return RC::SUCCESS;
+  }
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
   rc = right_->get_value(tuple, right_value);
+  if(rc == RC::DIVIDE_ZERO){
+    value.set_boolean(false);
+    return RC::SUCCESS;
+  }
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
     return rc;
@@ -483,6 +537,10 @@ AttrType ArithmeticExpr::value_type() const
       arithmetic_type_ != Type::DIV) {
     return AttrType::INTS;
   }
+  //当算数运算的左右操作数，有一个向量类型时，返回的也是向量类型
+  if (left_->value_type() == AttrType::VECTORS || right_->value_type() == AttrType::VECTORS) {
+    return AttrType::VECTORS;
+  }
 
   return AttrType::FLOATS;
 }
@@ -508,6 +566,9 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     } break;
 
     case Type::DIV: {
+      if(right_value.get_int() == 0 || right_value.get_float() == 0){
+        return RC::DIVIDE_ZERO;
+      }
       Value::divide(left_value, right_value, value);
     } break;
 
@@ -603,6 +664,11 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
+
+  if(right_ == nullptr){
+    LOG_WARN("you sql have divide 0");
+    return RC::DIVIDE_ZERO;
+  }
   rc = right_->get_value(tuple, right_value);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
@@ -685,8 +751,28 @@ RC ArithmeticExpr::try_get_value(Value &value) const
 ////////////////////////////////////////////////////////////////////////////////
 
 UnboundAggregateExpr::UnboundAggregateExpr(const char *aggregate_name, Expression *child)
-    : aggregate_name_(aggregate_name), child_(child)
-{}
+    : aggregate_name_(aggregate_name)
+{
+  if(child == nullptr){
+    child_ = nullptr;
+    copy_child_ = nullptr;
+    return ;
+  }
+  if(child->type() == ExprType::UNBOUND_FIELD){
+    Expression* copied = new UnboundFieldExpr(*dynamic_cast<UnboundFieldExpr*>(child)); 
+    copy_child_ =  std::unique_ptr<Expression> (copied);
+  }else if(child->type() == ExprType::STAR){
+    Expression* copied = new StarExpr(*dynamic_cast<StarExpr*>(child)); 
+    copy_child_ =  std::unique_ptr<Expression> (copied);
+  }
+  child_ =  std::unique_ptr<Expression>(child);
+}
+
+UnboundAggregateExpr::UnboundAggregateExpr(UnboundAggregateExpr * expr){
+  this->set_name(expr->name());
+  this->aggregate_name_ = expr->aggregate_name();
+  this->child_ = std::move(expr->copy_child());
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 AggregateExpr::AggregateExpr(Type type, Expression *child) : aggregate_type_(type), child_(child) {}
@@ -725,6 +811,22 @@ unique_ptr<Aggregator> AggregateExpr::create_aggregator() const
       aggregator = make_unique<SumAggregator>();
       break;
     }
+    case Type::MAX: {
+      aggregator = make_unique<MaxAggregator>();
+      break;
+    }
+    case Type::MIN: {
+      aggregator = make_unique<MinAggregator>();
+      break;
+    }
+    case Type::AVG: {
+      aggregator = make_unique<AvgAggregator>();
+      break;
+    }
+    case Type::COUNT: {
+      aggregator = make_unique<CountAggregator>();
+      break;
+    }
     default: {
       ASSERT(false, "unsupported aggregate type");
       break;
@@ -754,5 +856,179 @@ RC AggregateExpr::type_from_string(const char *type_str, AggregateExpr::Type &ty
   } else {
     rc = RC::INVALID_ARGUMENT;
   }
+  return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+VectorFunctionExpr::VectorFunctionExpr(VECTOR_FUNCTION type, Expression *left, Expression *right)
+    : vector_function_type_(type), left_(left), right_(right)
+{
+}
+VectorFunctionExpr::VectorFunctionExpr(VECTOR_FUNCTION type, unique_ptr<Expression> left, unique_ptr<Expression> right)
+    : vector_function_type_(type), left_(std::move(left)), right_(std::move(right))
+{}
+
+bool VectorFunctionExpr::equal(const Expression &other) const
+{
+  if (this == &other) {
+    return true;
+  }
+  if (type() != other.type()) {
+    return false;
+  }
+  auto &vector_function_expr = static_cast<const VectorFunctionExpr &>(other);
+  return vector_function_type_ == vector_function_expr.vector_function_type() && left_->equal(*vector_function_expr.left_) &&
+         right_->equal(*vector_function_expr.right_);
+}
+
+ExprType VectorFunctionExpr::type() const
+{
+  return ExprType::VECTOR_FUNCTION;
+}
+
+AttrType VectorFunctionExpr::value_type() const
+{
+  return AttrType::FLOATS;  //向量函数运算的结果是一个浮点数
+}
+
+int VectorFunctionExpr::value_length() const
+{
+  return sizeof(float);     //向量函数运算的结果是一个浮点数
+};
+
+RC VectorFunctionExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  RC rc = RC::SUCCESS;
+
+  Value left_value;
+  Value right_value;
+
+  rc = left_->get_value(tuple, left_value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+    return rc;
+  }
+  rc = right_->get_value(tuple, right_value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+    return rc;
+  }
+  return calc_value(left_value, right_value, value);
+}
+
+RC VectorFunctionExpr::try_get_value(Value &value) const
+{
+  RC rc = RC::SUCCESS;
+
+  Value left_value;
+  Value right_value;
+
+  rc = left_->try_get_value(left_value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (right_) {
+    rc = right_->try_get_value(right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  return calc_value(left_value, right_value, value);
+}
+
+float VectorFunctionExpr::l2_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector)
+{
+    float sum = 0.0;
+    for (size_t i = 0; i < left_vector.size(); ++i) {
+        float diff = left_vector[i] - right_vector[i];
+        sum += diff * diff;
+    }
+    return std::sqrt(sum);
+}
+
+float VectorFunctionExpr::cosine_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector)
+{
+    float dot_product = 0;
+    float norm_left = 0;
+    float norm_right = 0;
+
+    for (size_t i = 0; i < left_vector.size(); ++i) {
+        dot_product += left_vector[i] * right_vector[i];
+        norm_left += left_vector[i] * left_vector[i];
+        norm_right += right_vector[i] * right_vector[i];
+    }
+
+    norm_left = std::sqrt(norm_left);
+    norm_right = std::sqrt(norm_right);
+
+    if (norm_left == 0.0 || norm_right == 0.0) {
+        return 1.0; // 如果任一向量的范数为0，余弦距离为1
+    }
+
+    float cosine_similarity = dot_product / (norm_left * norm_right);
+    return 1.0f - cosine_similarity;
+}
+
+float VectorFunctionExpr::inner_product(const std::vector<float>& left_vector, const std::vector<float>& right_vector) {
+    float result = 0.0f;
+    for (size_t i = 0; i < left_vector.size(); ++i) {
+        result += left_vector[i] * right_vector[i];
+    }
+    return result;
+}
+
+RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_value, Value &value) const
+{
+  RC rc = RC::SUCCESS;
+
+  //进行类型转换，将不是vector类型的转换成vector类型
+  Value left_vector_value;
+  Value right_vector_value;
+  if(left_value.attr_type() != AttrType::VECTORS){
+    RC rc = Value::cast_to(left_value, AttrType::VECTORS, left_vector_value);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+  }
+  else{
+    left_vector_value = left_value;
+  }
+  if(right_value.attr_type() != AttrType::VECTORS){
+    RC rc = Value::cast_to(right_value, AttrType::VECTORS, right_vector_value);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+  }
+  else{
+    right_vector_value = right_value;
+  }
+  //执行计算逻辑
+  float result = 0;
+  auto vector_left = left_vector_value.get_vector();
+  auto vector_right = right_vector_value.get_vector();
+  switch (vector_function_type_) {
+    case VECTOR_FUNCTION::L2_DISTANCE: {
+      result =  l2_distance(vector_left, vector_right);
+    } break;
+
+    case VECTOR_FUNCTION::COSINE_DISTANCE: {
+      result = cosine_distance(vector_left, vector_right);
+    } break;
+
+    case VECTOR_FUNCTION::INNER_PRODUCT: {
+      result = inner_product(vector_left, vector_right);
+    } break;
+
+    default: {
+      rc = RC::INTERNAL;
+      LOG_WARN("unsupported VECTOR_FUNCTION type. %d", vector_function_type_);
+    } break;
+  }
+  value.set_type(AttrType::FLOATS);
+  value.set_data((char *) &result, 4);
   return rc;
 }

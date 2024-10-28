@@ -41,7 +41,8 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
   const Value     *values     = inserts.values.data();
   const int        value_num  = static_cast<int>(inserts.values.size());
   const TableMeta &table_meta = table->table_meta();
-  const int        field_num  = table_meta.field_num() - table_meta.sys_field_num();
+  //用户字段的数量 = 表字段的数量 - 系统字段数量（事务相关，不一定会有） - 系统非可见字段数量
+  const int        field_num  = table_meta.field_num() - table_meta.sys_field_num() - table_meta.system_not_visible_field_number();
   if (field_num != value_num) {
     LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
     return RC::SCHEMA_FIELD_MISSING;

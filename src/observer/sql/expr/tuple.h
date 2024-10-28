@@ -143,6 +143,9 @@ public:
         return rc;
       }
 
+      //group by的特例，null和null算一组的
+      if(this_value.attr_type() == AttrType::NULLS && other_value.attr_type() == AttrType::NULLS)
+        continue;
       result = this_value.compare(other_value);
       if (0 != result) {
         return rc;
@@ -171,7 +174,21 @@ public:
     speces_.clear();
   }
 
-  void set_record(Record *record) { this->record_ = record; }
+  void set_record(Record *record)
+  {
+    this->record_ = record;
+    //拿到空值列表，方便之后读取数据时，判断是否为null值
+    int null_field_list_index = table_->table_meta().sys_field_num();
+    Value* null_value_list = new Value();
+    RC rc = cell_at(null_field_list_index, *null_value_list);
+    if(rc != RC::SUCCESS){
+      LOG_INFO("从record中读取空值列表失败\n");
+      throw "从 record中读取空值列表失败";
+    }
+    else {
+      null_value_list_ = null_value_list->get_char_data();
+    }
+  }
 
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
   {
@@ -188,6 +205,19 @@ public:
     }
   }
 
+  /***
+   * @brief 针对tuple当前管理的record对象，修改指定字段的值，
+   *        注意，此时，该record.owner_属性应该为true，即表示当前record指向的内存，应该是由record对象自己管理的，而不是指向bufferPool中的Frame,
+   *        bufferPool中的Frame内存需要使用其它的对象进行更新，以确保更新后的数据能够被写入磁盘
+   * @param index 要更新的是用户表中的第几个字段，从0开始
+   * @param new_value 要更新成的新数据
+   */
+  // RC set_record_field(int index, const Value &new_value)
+  // {
+  //   int real_index = table_->table_meta().sys_field_num() + index;
+  //   return RC::UNIMPLEMENTED;
+  // }
+
   int cell_num() const override { return speces_.size(); }
 
   RC cell_at(int index, Value &cell) const override
@@ -195,6 +225,16 @@ public:
     if (index < 0 || index >= static_cast<int>(speces_.size())) {
       LOG_WARN("invalid argument. index=%d", index);
       return RC::INVALID_ARGUMENT;
+    }
+    //系统字段和空值列表字段之外的用户定义的表字段，可能为空值，需要提前判断
+    if(index > table_->table_meta().sys_field_num()) {
+      //判断是否为空值，是就直接返回，否则才去拷贝对应的内存
+      int before_field_count = table_->table_meta().sys_field_num()+ 1; //用户定义的数据字段是从sys_field、null_field_list之后开始
+      int pos_in_null_value_list = index - before_field_count;  //计算这是第几个用户定义的表字段
+      if(null_value_list_[pos_in_null_value_list] == '1') {
+        cell.set_null();
+        return RC::SUCCESS;
+      }
     }
 
     FieldExpr       *field_expr = speces_[index];
@@ -246,9 +286,21 @@ public:
   const Record &record() const { return *record_; }
 
 private:
+  /***
+   * @brief 根据字段是在用户表中的第几个字段，计算该字段是在record中的第几个字段
+   * @param index 表示是用户表中的第几个字段，从0开始
+   * @return 考虑前面的事务字段个数 + 空值列表，返回该字段是record中的第几个字段
+   */
+  // int get_index_in_record(int index)
+  // {
+  //   return 0;
+  // }
+
+private:
   Record                  *record_ = nullptr;
   const Table             *table_  = nullptr;
   std::vector<FieldExpr *> speces_;
+  const char* null_value_list_ = nullptr;   //空值列表，1:表示对应位置的cell为空值
 };
 
 /**
@@ -324,6 +376,14 @@ public:
   void set_names(const std::vector<TupleCellSpec> &specs) { specs_ = specs; }
   void set_cells(const std::vector<Value> &cells) { cells_ = cells; }
 
+  static RC set_zero_cells(ValueListTuple &value_list, size_t n){
+    for(size_t i = 0; i < n; i++){
+      Value zero(0);
+      value_list.cells_.push_back(zero);
+    }
+    return RC::SUCCESS;
+  }
+
   virtual int cell_num() const override { return static_cast<int>(cells_.size()); }
 
   virtual RC cell_at(int index, Value &cell) const override
@@ -331,7 +391,7 @@ public:
     if (index < 0 || index >= cell_num()) {
       return RC::NOTFOUND;
     }
-
+    
     cell = cells_[index];
     return RC::SUCCESS;
   }

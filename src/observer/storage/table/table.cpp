@@ -220,26 +220,31 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   return rc;
 }
 
-RC Table::update_record(Record &record, const char* field_name, const Value &value){
+RC Table::update_record(Record &record, vector<Value> &values, const char* field_name, const Value &value){
   RC rc = RC::SUCCESS;
   // LOG_DEBUG("type:%d, value:%s, field_name:%s", value.attr_type(), value.to_string().c_str(), field_name);
 
-  Record new_record;
-  int   record_size = table_meta_.record_size();
-  char *record_data = (char *)malloc(record_size);
-  const int normal_field_start_index = table_meta_.sys_field_num();
-  const FieldMeta *field = table_meta_.field(normal_field_start_index);
-  int offset = field->offset();
 
-  memcpy(record_data, record.data() + offset, record_size);
-  new_record.set_data_owner(record_data, record_size);
-  
-  rc = set_value_to_record(record_data, value, table_meta_.field(field_name));
+  Record new_record;
+  // int   record_size = table_meta_.record_size();
+  // char *record_data = (char *)malloc(record_size);
+  // const int normal_field_start_index = table_meta_.sys_field_num();
+  // const FieldMeta *field = table_meta_.field(normal_field_start_index);
+  // int offset = field->offset();
+
+  // memcpy(record_data, record.data() + offset, record_size);
+  // new_record.set_data_owner(record_data, record_size);
+
+  rc = make_record(values.size(), values.data(), new_record);
+
+  //make_record失败，可能是values的值不合法，比如某些字段不能为null
+  if(OB_FAIL(rc)) {
+    return rc;
+  }
   rc = insert_record(new_record);
   
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to insert record. table name:%s", table_meta_.name());
-    free(record_data);
     return rc;
   }
 
@@ -320,11 +325,26 @@ const TableMeta &Table::table_meta() const { return table_meta_; }
 RC Table::make_record(int value_num, const Value *values, Record &record)
 {
   RC rc = RC::SUCCESS;
-  // 检查字段类型是否一致
-  if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
+  // 检查字段类型是否一致, 注意，系统自带一个空值列表的隐藏字段
+  if (value_num + table_meta_.system_not_visible_field_number() + table_meta_.sys_field_num() != table_meta_.field_num()) {
     LOG_WARN("Input values don't match the table's schema, table name:%s", table_meta_.name());
     return RC::SCHEMA_FIELD_MISSING;
   }
+
+  //在创建record记录时，将隐藏字段空值列表null_value_list对应的数据一起添加到record中
+  Value *new_values = new Value[value_num+1];
+  Value null_value_list = Value();
+  rc = get_null_value_list(value_num, values, null_value_list);
+  if(rc != RC::SUCCESS) {
+    LOG_INFO("make_record过程中，获取隐藏字段空值列表失败\n");
+    return rc;
+  }
+  new_values[0] = null_value_list;
+  for(int i = 1; i < value_num+1; i++) {
+    new_values[i] = values[i-1];
+  }
+  values = new_values;
+  value_num = value_num + 1; //因为添加了隐藏字段，所以value_num需要+1
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 复制所有字段的值
@@ -335,7 +355,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
-    if (field->type() != value.attr_type()) {
+    if (field->type() != value.attr_type() && value.attr_type() != AttrType::NULLS) { //只有类型不一致，且提供的不是null值，才进行类型转换
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {
@@ -358,11 +378,48 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   return RC::SUCCESS;
 }
 
+RC Table::get_null_value_list(int value_num, const Value *values, Value& result)
+{
+  std::vector<FieldMeta> field_metas = *(table_meta_.field_metas()); //注意：第一个是null值列表对应的字段元信息
+  FieldMeta null_value_list_field_meta = field_metas[table_meta_.sys_field_num()];
+  LOG_INFO("len:%d",null_value_list_field_meta.len());
+  char* null_value_list_data = (char *) malloc(null_value_list_field_meta.len());
+  null_value_list_data[value_num] = '\0'; //字符串结束符
+  for(int i = 0; i < value_num;i++) {
+    if(field_metas[i+1].not_null()) {//字段元信息要求不是null
+      if(values[i].attr_type() != AttrType::NULLS) { //提供的数据不是null
+        null_value_list_data[i] = '0';
+      }
+      else { //提供的数据是null
+        LOG_INFO("字段:%s不能为空值\n",field_metas[i+1].name());
+        return RC::FIELD_CAN_NOT_BE_NULL;
+      }
+    }
+    else if(!field_metas[i+1].not_null()) //字段元信息没有要求不是null
+    {
+      if(values[i].attr_type() != AttrType::NULLS) { //提供的数据不是null
+        null_value_list_data[i] = '0';
+      }
+      else { //提供的数据是null
+        null_value_list_data[i] = '1';
+      }
+    }
+  }
+  result.set_type(AttrType::CHARS);
+  result.set_data(null_value_list_data, strlen(null_value_list_data));
+  free(null_value_list_data); //释放临时内存
+  return RC::SUCCESS;
+}
+
 RC Table::set_value_to_record(char *record_data, const Value &value, const FieldMeta *field)
 {
   if(field == nullptr){
     LOG_WARN("filed is empty");
     return RC::EMPTY;
+  }
+  if(field->len() < value.length()) {
+    LOG_WARN("传入value的存储长度，超过了字段元数据FieldMeta中定义的长度");
+    return RC::INVALID_ARGUMENT;
   }
   size_t       copy_len = field->len();
   const size_t data_len = value.length();

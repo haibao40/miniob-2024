@@ -27,7 +27,8 @@ public:
   int compare(const Value &left, const Value &right) const override;
 
   /***
-   * @brief 将val 转换为 type类型，并将结果保存在result中，目前，只支持【字符串类型】-->【日期类型】的转换
+   * @brief 将val 转换为 type类型，并将结果保存在result中，
+   *        目前，支持【字符串类型】-->【日期类型】, 【字符串类型】-->【向量类型】
    * @left 待转换值，必须满足 val.attr_type_ == AttrType::CHARS
    * @result 转换的结果
    */
@@ -38,4 +39,9 @@ public:
   int cast_cost(AttrType type) override;
 
   RC to_string(const Value &val, string &result) const override;
+
+private:
+  /// 将char类型转换为其他类型的代码封装为函数
+  static RC cast_char_to_date(const Value &val, Value &result);
+  static RC cast_char_to_vector(const Value &val, Value &result);
 };

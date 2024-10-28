@@ -24,6 +24,8 @@ public:
 
   int compare(const Value &left, const Value &right) const override;
 
+  int cast_cost(AttrType type) override;
+
   RC add(const Value &left, const Value &right, Value &result) const override;
   RC subtract(const Value &left, const Value &right, Value &result) const override;
   RC multiply(const Value &left, const Value &right, Value &result) const override;

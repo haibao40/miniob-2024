@@ -29,6 +29,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
+#include "sql/operator/order_by_logical_operator.h"
 
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
@@ -104,8 +105,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   last_oper = &table_oper;
 
   const std::vector<Table *> &tables = select_stmt->tables();
-  for (Table *table : tables) {
-
+  if(select_stmt->join_filter().size() == 0){ //这是原来的多表查询逻辑,没有使用join 这里有更好的方案
+    for (Table *table : tables) {
     unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
     if (table_oper == nullptr) {
       table_oper = std::move(table_get_oper);
@@ -116,7 +117,37 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       table_oper = unique_ptr<LogicalOperator>(join_oper);
     }
   }
+  }else{
+    int on_predicate_oper_current = 0;
+    std::vector<FilterStmt*> join_filters = select_stmt->join_filter();
+    for (Table *table : tables) {
+    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+    if (table_oper == nullptr) {
+      table_oper = std::move(table_get_oper);
+    }else{
+      unique_ptr<LogicalOperator> on_predicate_oper;
+      //创建过滤算子，放在当前join算子的上面
+      RC RC_JOIN_ON_RC = create_plan(join_filters[join_filters.size() - on_predicate_oper_current -1], on_predicate_oper);
+      if (OB_FAIL(RC_JOIN_ON_RC)) {
+          LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(RC_JOIN_ON_RC));
+          return RC_JOIN_ON_RC;
+      }
+      on_predicate_oper_current++;
+      LogicalOperator* join_oper = new JoinLogicalOperator;
+      join_oper->add_child(std::move(table_oper));
+      join_oper->add_child(std::move(table_get_oper));
+      if(on_predicate_oper){
+         on_predicate_oper->add_child(std::move(unique_ptr<LogicalOperator>(join_oper)));
+         table_oper =std::move(on_predicate_oper);
+      
+      }else{
+        table_oper = std::move(std::move(unique_ptr<LogicalOperator>(join_oper)));
+      }
+    }
+    }
 
+
+  }
   unique_ptr<LogicalOperator> predicate_oper;
 
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
@@ -148,6 +179,37 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &group_by_oper;
   }
 
+  /*     这一段都是新加的having过滤算子    */
+  unique_ptr<LogicalOperator> having_predicate_oper;
+
+  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create having_predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (having_predicate_oper) {
+    if (*last_oper) {
+      having_predicate_oper->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &having_predicate_oper;
+  }
+  /*     这一段都是新加的having过滤算子    */
+
+  unique_ptr<LogicalOperator> order_by_oper; //李晓鹏笔记 将逻辑计划加入到逻辑计划树形结构里面 在视图下面 在group by 上面
+  rc = create_order_by_plan(select_stmt, order_by_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+  if(order_by_oper){
+      if (*last_oper) {
+      order_by_oper->add_child(std::move(*last_oper));
+    }
+    last_oper = &order_by_oper;
+  }
+
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
   if (*last_oper) {
     project_oper->add_child(std::move(*last_oper));
@@ -162,35 +224,42 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
   RC                                  rc = RC::SUCCESS;
   std::vector<unique_ptr<Expression>> cmp_exprs;
   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
-  for (const FilterUnit *filter_unit : filter_units) {
+  unique_ptr <Expression> left, right;  //用来存比较表达式的左表达式和右表达式
+
+  for (FilterUnit *filter_unit : filter_units) {
     const FilterObj &filter_obj_left  = filter_unit->left();
-    const FilterObj &filter_obj_right = filter_unit->right();
 
-    unique_ptr<Expression> left(filter_obj_left.is_attr
+    right = std::move(filter_unit->right().expr);//右边默认为表达式
+    if(filter_obj_left.is_expr) //左右都为表达式的情况
+    {
+      left = std::move(filter_unit->left().expr);
+    }
+    else if(!filter_obj_left.is_expr) //左边不是表达式，右边是表达式
+    {
+      left = std::move(unique_ptr<Expression> (filter_obj_left.is_attr
                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
-                                    : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+                                    : static_cast<Expression *>(new ValueExpr(filter_obj_left.value))));
+    }
 
-    unique_ptr<Expression> right(filter_obj_right.is_attr
-                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
-                                     : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
-
-    if (left->value_type() != right->value_type()) {
+    //比较表达式左右两边类型不一致，且都不为null的情况下，要进行类型转换
+    if(left->value_type() != right->value_type() && left->value_type() != AttrType::NULLS && right->value_type() != AttrType::NULLS)
+    {
       auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
       auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
       if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {
-        ExprType left_type = left->type();
-        auto cast_expr = make_unique<CastExpr>(std::move(left), right->value_type());
-        if (left_type == ExprType::VALUE) {
-          Value left_val;
-          if (OB_FAIL(rc = cast_expr->try_get_value(left_val)))
-          {
-            LOG_WARN("failed to get value from left child", strrc(rc));
-            return rc;
+          ExprType left_type = left->type();
+          auto cast_expr = make_unique<CastExpr>(std::move(left), right->value_type());
+          if (left_type == ExprType::VALUE) {
+            Value left_val;
+            if (OB_FAIL(rc = cast_expr->try_get_value(left_val)))
+            {
+              LOG_WARN("failed to get value from left child", strrc(rc));
+              return rc;
+            }
+            left = make_unique<ValueExpr>(left_val);
+          } else {
+            left = std::move(cast_expr);
           }
-          left = make_unique<ValueExpr>(left_val);
-        } else {
-          left = std::move(cast_expr);
-        }
       } else if (right_to_left_cost < left_to_right_cost && right_to_left_cost != INT32_MAX) {
         ExprType right_type = right->type();
         auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
@@ -205,7 +274,6 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
         } else {
           right = std::move(cast_expr);
         }
-
       } else {
         rc = RC::UNSUPPORTED;
         LOG_WARN("unsupported cast from %s to %s", attr_type_to_string(left->value_type()), attr_type_to_string(right->value_type()));
@@ -252,32 +320,18 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   FilterStmt    *filter_stmt  = update_stmt->filter_stmt();
   Value value = (update_stmt->value());
   
-  // LOG_DEBUG("update data: %d, field_name:%s", update_stmt->value().get_int(), field_name);
-  // if(update_stmt->value()->attr_type() )
-  
-  // vector<Value> values(update_stmt->value(), update_stmt->value() + 1);
-  vector<Value> values;
-  values.push_back(value);
+  // vector<Value> values;
+  // values.push_back(value);
 
   unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
-  unique_ptr<LogicalOperator> table_get_oper1(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
   unique_ptr<LogicalOperator> predicate_oper;
-  unique_ptr<LogicalOperator> predicate_oper1;
-  FilterStmt *filter_stmt1 = new FilterStmt();
 
   RC rc = create_plan(filter_stmt, predicate_oper);
   if (rc != RC::SUCCESS) {
     return rc;
   }
-  rc = create_plan(filter_stmt1, predicate_oper1);
-  if (rc != RC::SUCCESS) {
-    return rc;
-  }
-
 
   unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, field_name, value));
-  // unique_ptr<LogicalOperator> delete_oper(new DeleteLogicalOperator(table));
-  // unique_ptr<LogicalOperator> insert_oper(new InsertLogicalOperator(table, values));
  
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));
@@ -285,16 +339,7 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   } else {
     update_oper->add_child(std::move(table_get_oper));
   }
-  if (predicate_oper1) {
-    predicate_oper1->add_child(std::move(table_get_oper1));
-    update_oper->add_child(std::move(predicate_oper1)); 
-  } else {
-    update_oper->add_child(std::move(table_get_oper1));
-  }
-  // update_oper->add_child(std::move(delete_oper));
-  // update_oper->add_child(std::move(insert_oper));
 
-  // logical_operator.reset(update_operator);
   logical_operator = std::move(update_oper);
   return RC::SUCCESS;
 }
@@ -342,11 +387,32 @@ RC LogicalPlanGenerator::create_plan(ExplainStmt *explain_stmt, unique_ptr<Logic
   return rc;
 }
 
+// 李晓鹏笔记 搞一个 order_by的逻辑计划 几乎照抄 group_by_plan
+RC LogicalPlanGenerator::create_order_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator){
+  vector<unique_ptr<Expression>> &order_by_expressions = select_stmt->order_by();
+  if(order_by_expressions.empty()){
+    logical_operator = NULL;
+    return RC::SUCCESS;
+  }
+  // 这里应该先遍历一下，看看有没有未绑定的字段，如果有那么报错 不搞了
+  // 如果这个物理计划需要其他的Expression 那么合并 不搞了
+    auto order_by_oper = make_unique<OrderByLogicalOperator>(std::move(order_by_expressions)); //李晓鹏笔记 没有这一行 logical_operator会更新不了
+    logical_operator = std::move(order_by_oper);
+    return RC::SUCCESS;
+
+}
 RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   vector<unique_ptr<Expression>> &group_by_expressions = select_stmt->group_by();
   vector<Expression *> aggregate_expressions;
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
+  vector<unique_ptr<Expression>> &having_expressions = select_stmt->having_expressions();
+
+  //把having里的聚合表达式加到query_expressions里去
+  // for(std::unique_ptr<Expression> &having_expression:select_stmt->having_expressions()){
+  //   query_expressions.emplace_back(std::move(having_expression));
+  // }
+  
   function<RC(std::unique_ptr<Expression>&)> collector = [&](unique_ptr<Expression> &expr) -> RC {
     RC rc = RC::SUCCESS;
     if (expr->type() == ExprType::AGGREGATION) {
@@ -392,13 +458,22 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   for (unique_ptr<Expression> &expression : query_expressions) {
     bind_group_by_expr(expression);
   }
+  for (unique_ptr<Expression> &expression : having_expressions) {
+    bind_group_by_expr(expression);
+  }
 
   for (unique_ptr<Expression> &expression : query_expressions) {
+    find_unbound_column(expression);
+  }
+  for (unique_ptr<Expression> &expression : having_expressions) {
     find_unbound_column(expression);
   }
 
   // collect all aggregate expressions
   for (unique_ptr<Expression> &expression : query_expressions) {
+    collector(expression);
+  }
+  for (unique_ptr<Expression> &expression : having_expressions) {
     collector(expression);
   }
 
@@ -419,3 +494,113 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   logical_operator = std::move(group_by_oper);
   return RC::SUCCESS;
 }
+
+// RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<LogicalOperator> &logical_operator)
+// {
+//   RC                                  rc = RC::SUCCESS;
+//   std::vector<unique_ptr<Expression>> cmp_exprs;
+//   const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
+//   for (FilterUnit *filter_unit : filter_units) {
+//     const FilterObj &filter_obj_left  = filter_unit->left();
+//     const FilterObj &filter_obj_right = filter_unit->right();
+
+//     if(filter_obj_left.is_expr || filter_obj_right.is_expr){
+//       if(filter_obj_left.is_expr == false){
+//         unique_ptr<Expression> left(filter_obj_left.is_attr
+//                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
+//                                     : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+//         unique_ptr<Expression> right(std::move(filter_unit->right().expr));
+//         if((filter_obj_left.is_attr && filter_obj_left.field.attr_type() == AttrType::DATES) ||
+//           (!filter_obj_left.is_attr && filter_obj_left.value.attr_type() == AttrType::DATES)){
+//           auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
+//           if(right_to_left_cost < INT32_MAX ){
+//             ExprType right_type = right->type();
+//             auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
+//             if (right_type == ExprType::VALUE) {
+//               Value right_val;
+//               if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
+//               {
+//                 LOG_WARN("failed to get value from right child", strrc(rc));
+//                 return rc;
+//               }
+//               right = make_unique<ValueExpr>(right_val);
+//             } else {
+//               right = std::move(cast_expr);
+//             }
+
+//           }
+//         }
+//         ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+//         cmp_exprs.emplace_back(cmp_expr);
+//       }else if(filter_obj_right.is_expr == false){
+//         unique_ptr<Expression> right(filter_obj_right.is_attr
+//                                       ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
+//                                       : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+//         ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(filter_unit->left().expr), std::move(right));
+//         cmp_exprs.emplace_back(cmp_expr);
+//       }else{
+//         ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(filter_unit->left().expr), std::move(filter_unit->right().expr));
+//         cmp_exprs.emplace_back(cmp_expr);
+//       }
+//       //unique_ptr<Expression> left(std::move(filter_obj_left.expr));
+//     }else{
+//       unique_ptr<Expression> left(filter_obj_left.is_attr
+//                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
+//                                     : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+//       unique_ptr<Expression> right(filter_obj_right.is_attr
+//                                       ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
+//                                       : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+
+//       if (left->value_type() != right->value_type()) {
+//         auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
+//         auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
+//         if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {
+//           ExprType left_type = left->type();
+//           auto cast_expr = make_unique<CastExpr>(std::move(left), right->value_type());
+//           if (left_type == ExprType::VALUE) {
+//             Value left_val;
+//             if (OB_FAIL(rc = cast_expr->try_get_value(left_val)))
+//             {
+//               LOG_WARN("failed to get value from left child", strrc(rc));
+//               return rc;
+//             }
+//             left = make_unique<ValueExpr>(left_val);
+//           } else {
+//             left = std::move(cast_expr);
+//           }
+//         } else if (right_to_left_cost < left_to_right_cost && right_to_left_cost != INT32_MAX) {
+//           ExprType right_type = right->type();
+//           auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
+//           if (right_type == ExprType::VALUE) {
+//             Value right_val;
+//             if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
+//             {
+//               LOG_WARN("failed to get value from right child", strrc(rc));
+//               return rc;
+//             }
+//             right = make_unique<ValueExpr>(right_val);
+//           } else {
+//             right = std::move(cast_expr);
+//           }
+
+//         } else {
+//           rc = RC::UNSUPPORTED;
+//           LOG_WARN("unsupported cast from %s to %s", attr_type_to_string(left->value_type()), attr_type_to_string(right->value_type()));
+//           return rc;
+//         }
+//       }
+//       ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+//       cmp_exprs.emplace_back(cmp_expr);
+//     }
+
+//   }
+
+//   unique_ptr<PredicateLogicalOperator> predicate_oper;
+//   if (!cmp_exprs.empty()) {
+//     unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+//     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+//   }
+
+//   logical_operator = std::move(predicate_oper);
+//   return rc;
+// }
