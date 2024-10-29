@@ -44,7 +44,9 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
+    auto it = select_sql.relations.begin(); // 获取指向第一个元素的迭代器
+    std::advance(it, i);
+    const char *table_name = it->first.c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -66,6 +68,17 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   ExpressionBinder expression_binder(binder_context);
   
   for (unique_ptr<Expression> &expression : select_sql.expressions) {
+    //如果有字段表达式，就要检查表名是否为设置的别名，是则把名字改回来
+    if(expression.get()->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+    
     RC rc = expression_binder.bind_expression(expression, bound_expressions);
     if (OB_FAIL(rc)) {
       LOG_INFO("bind expression failed. rc=%s", strrc(rc));

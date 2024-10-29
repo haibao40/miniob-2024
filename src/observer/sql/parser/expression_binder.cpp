@@ -152,8 +152,11 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
   auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expr.get());
 
-  const char *table_name = unbound_field_expr->table_name();
-  const char *field_name = unbound_field_expr->field_name();
+  const char *table_name      = unbound_field_expr->table_name();
+  const char *field_name      = unbound_field_expr->field_name();
+  const char *table_alias     = unbound_field_expr->table_alias();
+  const char *field_alias     = unbound_field_expr->field_alias();
+  std::string field_expr_name = ""; //表达式的名字
 
   Table *table = nullptr;
   if (is_blank(table_name)) {
@@ -164,6 +167,8 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
     table = context_.query_tables()[0];
   } else {
+    //有别名取别名，无别名取表名
+    field_expr_name += strcasecmp(table_name, table_alias) == 0 ? string(table_name) + "." : string(table_alias) + ".";
     table = context_.find_table(table_name);
     if (nullptr == table) {
       LOG_INFO("no such table in from list: %s", table_name);
@@ -182,7 +187,9 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
-    field_expr->set_name(field_name);
+    //有别名取别名，没别名用字段名
+    field_expr_name += strcasecmp(field_alias, "") == 0 ? field_name : field_alias;
+    field_expr->set_name(field_expr_name);
     bound_expressions.emplace_back(field_expr);
   }
 
