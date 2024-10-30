@@ -77,7 +77,7 @@ RC ParseStage::check_match_in_comparison_with_subquery(ParsedSqlNode* parsed_sql
   }
   vector<CompOp> subquery_comp_ops = {IN,NOT_IN,EXISTS,NOT_EXISTS};
   for(auto condition: parsed_sql_node->selection.conditions) {
-    if(condition.right_is_expr == 1 && condition.right_expr->type() == ExprType::SUBQUERY) {
+    if(condition.right_is_expr == 1 && condition.right_expr->type() == ExprType::UNBOUND_SUBQUERY) {
       UnboundSubqueryExpr* unbound_subquery_expr = (UnboundSubqueryExpr*) condition.right_expr;
       ParsedSqlNode* subquery_parsedSqlNode = unbound_subquery_expr->parsed_sql_node();
       std::vector<std::unique_ptr<Expression>>& subquery_expressions = subquery_parsedSqlNode->selection.expressions;
