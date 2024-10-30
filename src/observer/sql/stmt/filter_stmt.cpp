@@ -100,6 +100,19 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       Table* table = name_table.second;
       binder_context.add_table(table);
     }
+
+    if(filter_obj.expr->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(filter_obj.expr.get());
+      for(const auto& pair : *tables){
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          const char* table_name = pair.second->name();
+          unbound_field_expr->set_table_name(table_name);
+          binder_context.add_table_alias(table_name, unbound_field_expr->table_name());
+          break;
+        }
+      }
+    }
+
     vector<unique_ptr<Expression>> bound_expressions;
     ExpressionBinder expression_binder(binder_context);
 

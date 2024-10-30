@@ -212,6 +212,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_table_select_stmt
 %type <sql_node>            drop_table_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
@@ -263,6 +264,7 @@ command_wrapper:
   | set_variable_stmt
   | help_stmt
   | exit_stmt
+  | create_table_select_stmt
     ;
 
 exit_stmt:      
@@ -549,6 +551,13 @@ update_stmt:      /*  update 语句的语法解析树*/
       free($4);
     }
     ;
+create_table_select_stmt:      /*  create_table_select 语句的语法解析树*/
+    CREATE TABLE ID AS select_stmt{
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      $$->create_table_select.table_name    = $3;
+      $$->create_table_select.sql_node      = $5; 
+    }
+    ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM rel_list where group_by having order_by
     {
@@ -761,6 +770,12 @@ rel_list:
       free($1);
       free($3);
     }
+    | relation ID{
+      $$ = new std::map<std::string, std::string>();
+      $$->insert({$1, $2});
+      free($1);
+      free($2);
+    }
     | relation AS ID COMMA rel_list{
       if ($5 != nullptr) {
         $$ = $5;
@@ -770,6 +785,16 @@ rel_list:
       $$->insert($$->begin(), {$1, $3});
       free($1);
       free($3);
+    }
+    | relation ID COMMA rel_list{
+      if ($4!= nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::map<std::string, std::string>();
+      }
+      $$->insert($$->begin(), {$1, $2});
+      free($1);
+      free($2);
     }
     | join_in{
       if($$ == nullptr){
