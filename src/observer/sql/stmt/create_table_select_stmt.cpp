@@ -50,17 +50,32 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &create_table_
         attr_info.type     = fieldmeta->type();
         attr_info.visible  = fieldmeta->visible();
         attr_infos.push_back(attr_info);
+    }else if(expression.get()->type() == ExprType::STAR){
+        auto expr = static_cast<StarExpr *>(expression.get());
+        Table *table = db->find_table(expr->table_name());
+        const std::vector<FieldMeta>* fieldmetas = table->table_meta().field_metas();
+        for(auto fieldmeta:*fieldmetas){
+            AttrInfoSqlNode attr_info;
+            attr_info.length   = fieldmeta.len();
+            attr_info.name     = fieldmeta.name();
+            attr_info.not_null = fieldmeta.not_null();
+            attr_info.type     = fieldmeta.type();
+            attr_info.visible  = fieldmeta.visible();
+            attr_infos.push_back(attr_info);
+        }
     }
   }
-  if(attr_infos.size() != create_attr_infos.size()){
+  if(0 != create_attr_infos.size() && attr_infos.size() != create_attr_infos.size()){
     return RC::WRONG_ATTR;
-  }
-  for(size_t i = 0; i < attr_infos.size(); i++){
-    if(!(attr_infos[i] == create_attr_infos[i])){
-        return RC::WRONG_ATTR; //要新建的表字段属性和拿到的字段属性不一致,除了名字以外，其他的都需要相等
+  }else if(0 != create_attr_infos.size() && attr_infos.size() == create_attr_infos.size()){
+    for(size_t i = 0; i < attr_infos.size(); i++){
+        if(!(attr_infos[i] == create_attr_infos[i])){
+            return RC::WRONG_ATTR; //要新建的表字段属性和拿到的字段属性不一致,除了名字以外，其他的都需要相等
+        }
+        attr_infos[i].name = create_attr_infos[i].name;//以建表属性名为准
     }
-    attr_infos[i].name = create_attr_infos[i].name;//以建表属性名为准
   }
+  
 
   //开始建表,因为一次只能执行一句sql语句，所以在resolve层就建表实属无奈
   rc = db->create_table(create_table_select_sql.table_name.c_str(), attr_infos, StorageFormat::ROW_FORMAT);
