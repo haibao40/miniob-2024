@@ -398,7 +398,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   Value left_value;
   Value right_value;
 
-  //对于列子查询的情况，需要调用子查询表达另外的函数去获取子查询的执行结果,对于标量子查询，可以像普通的表达式一样走get_value
+  //case1:对于列子查询的情况，需要调用子查询表达另外的函数去获取子查询的执行结果,对于标量子查询，可以像普通的表达式一样走get_value
   //由于列子查询只会出现在in 或者exists 的右侧，所有这里只是对右侧进行判断
   vector<CompOp> subquery_comp_ops = {IN,NOT_IN,EXISTS,NOT_EXISTS};
   if(right_->type() == ExprType::SUBQUERY
@@ -407,6 +407,14 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     return rc;
   }
 
+  //case2:对于右侧是常量列表表达式的情况
+  if(right_->type() == ExprType::VALUE_LIST
+    && std::find(subquery_comp_ops.begin(), subquery_comp_ops.end(), comp_) != subquery_comp_ops.end()) {
+    rc = compare_with_value_list(tuple, value);
+    return rc;
+  }
+
+  //case3:普通情况
   rc = left_->get_value(tuple, left_value);
   if(rc == RC::DIVIDE_ZERO){
     value.set_boolean(false);
@@ -542,6 +550,45 @@ RC ComparisonExpr::compare_with_column_subquery(const Tuple& tuple, Value& value
       bool result = value.get_boolean();
       value.set_boolean(!result);
     }
+  }
+  return rc;
+}
+
+RC ComparisonExpr::compare_with_value_list(const Tuple& tuple, Value& value) const
+{
+  RC rc = RC::SUCCESS;
+  Value left_value;
+  rc = left_->get_value(tuple, left_value);
+  if(rc == RC::DIVIDE_ZERO){
+    value.set_boolean(false);
+    return RC::SUCCESS;
+  }
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+    return rc;
+  }
+  ValueListExpr* value_list_expr = (ValueListExpr*) right_.get();
+  vector<Value> value_list;
+  value_list_expr->get_value_list(value_list);
+  switch(comp_) {
+    case IN: {
+      rc = in_value_list(left_value, value_list, value);
+    }break;
+    case NOT_IN: {
+      rc = in_value_list(left_value, value_list, value);
+      bool result = value.get_boolean();
+      value.set_boolean(!result);
+    }break;
+    case EXISTS: {
+      value.set_boolean(value_list.size() != 0);
+    }break;
+    case NOT_EXISTS:{
+      value.set_boolean(value_list.size() == 0);
+    }break;
+    default: {
+      LOG_ERROR("这是专门处理比较表达式中包含常量列表的情况，不支持这种运算符，comp_= %d", comp_);
+      rc = RC::INVALID_ARGUMENT;
+    }break;
   }
   return rc;
 }

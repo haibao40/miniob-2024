@@ -247,9 +247,10 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
                                     : static_cast<Expression *>(new ValueExpr(filter_obj_left.value))));
     }
 
-    //比较表达式左右两边类型不一致，且都不为null，都不是子查询的情况下，要进行类型转换
+    //比较表达式左右两边类型不一致，都不为null，都不是子查询，都不是列表表达式，要进行类型转换
     if(left->value_type() != right->value_type() && left->value_type() != AttrType::NULLS && right->value_type() != AttrType::NULLS
-      && left->type() != ExprType::SUBQUERY && right->type() != ExprType::SUBQUERY)
+      && left->type() != ExprType::SUBQUERY && right->type() != ExprType::SUBQUERY
+      && left->type() != ExprType::VALUE_LIST && right->type() != ExprType::VALUE_LIST)
     {
       auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
       auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());

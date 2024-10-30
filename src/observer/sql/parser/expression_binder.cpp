@@ -74,6 +74,10 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
       return bind_value_expression(expr, bound_expressions);
     } break;
 
+    case ExprType::VALUE_LIST: {
+      return bind_value_expression(expr, bound_expressions);
+    } break;
+
     case ExprType::CAST: {
       return bind_cast_expression(expr, bound_expressions);
     } break;

@@ -708,6 +708,13 @@ expression:
     | LBRACE select_stmt RBRACE {
       $$ = new UnboundSubqueryExpr($2);
     }
+    | LBRACE value value_list RBRACE{
+      if($3 == nullptr){
+        $3 = new vector<Value>();
+      }
+      $3->push_back(*$2);
+      $$ = new ValueListExpr(*$3);
+    }
     ;
 
 rel_attr:

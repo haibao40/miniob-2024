@@ -52,7 +52,8 @@ enum class ExprType
   VECTOR_FUNCTION, ///< 向量函数运算
   AGGREGATION,  ///< 聚合运算
   UNBOUND_SUBQUERY,   ///< 未绑定的子查询
-  SUBQUERY       ///     < 绑定后的子查询表达式
+  SUBQUERY ,      ///     < 绑定后的子查询表达式
+  VALUE_LIST      /// 常量列表
 };
 
 /**
@@ -316,6 +317,11 @@ public:
    * @brief 专门处理比较表达式中包含列子查询的情况,即in、not in、exists、 not exists这几种情况
    */
   RC compare_with_column_subquery(const Tuple& tuple, Value& value) const;
+
+  /***
+   * @brief 专门处理比较表达式中包含常量列表的情况 ，比如 id in （1,2,3）
+   */
+  RC compare_with_value_list(const Tuple& tuple, Value& value) const;
 
   RC like_value(const Value &left, const Value &right, bool &value) const;
   template <typename T>
@@ -670,4 +676,42 @@ private:
 
   RC get_signal_value_in_non_correlated_query(Value& value) const;
   RC get_value_list_in_non_correlated_query(vector<Value>& value_list) const;
+};
+
+
+/**
+ * @brief 常量列表表达式, 即由常量组成的列表，例如：(1,2,3)，一般用在in 操作符中，例如：select * from t where a in (1,2,3)
+ * @ingroup Expression
+ */
+class ValueListExpr : public Expression
+{
+public:
+  ValueListExpr() = default;
+  explicit ValueListExpr(const vector<Value>& value_list) : value_list_(value_list) {}
+
+  virtual ~ValueListExpr() = default;
+
+  /// 这个函数暂时不支持，虽然返回的false，但是没啥实际意义
+  bool equal(const Expression &other) const override{ return false;}
+
+  ///注意：列表中可能有多个常量表达式Value,所以，对于这个表达式而言，不支持通过get_value来获取值
+  RC get_value(const Tuple &tuple, Value &value) const override {return RC::UNSUPPORTED;}
+  RC get_column(Chunk &chunk, Column &column) override{ return  RC::UNSUPPORTED;}
+  RC try_get_value(Value &value) const override{ return  RC::UNSUPPORTED;}
+
+  RC get_value_list(vector<Value>& value_list)
+  {
+    value_list.insert(value_list.begin(), value_list_.begin(), value_list_.end());
+    return RC::SUCCESS;
+  }
+
+  ExprType type() const override { return ExprType::VALUE_LIST; }
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+  /// 这个函数暂时不支持，虽然返回的0，但是没啥实际意义
+  int      value_length() const override { return 0; }
+
+
+private:
+  ///这里可以存放多个常量，组成一个列表
+  mutable vector<Value> value_list_;
 };
