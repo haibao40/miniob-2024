@@ -326,6 +326,22 @@ public:
    */
   RC in_value_list(const Value& left, const vector<Value>& value_list, Value &value) const;
 
+  /***
+  * @brief 在有子查询的情况下，在执行具体的逻辑之前，检测表达式两边是否能够匹配的上，否者返回错误,
+  *        根据primary-simple-sub-query.test中的测试用例，以下这些情况都是不匹配的，需要返回错误
+  *        CREATE TABLE ssq_1(id int, col1 int, feat1 float);
+  *        CREATE TABLE ssq_2(id int, col2 int, feat2 float);
+  *        CREATE TABLE ssq_3(id int, col3 int, feat3 float);
+  *        select * from ssq_1 where col1 = (select ssq_2.col2 from ssq_2);
+  *        select * from ssq_1 where col1 = (select * from ssq_2);
+  *        select * from ssq_1 where col1 in (select * from ssq_2);
+  *        select * from ssq_1 where col1 not in (select * from ssq_2);
+  */
+  RC check_match(bool& is_match)
+  {
+    
+  }
+
 
 private:
   /***
