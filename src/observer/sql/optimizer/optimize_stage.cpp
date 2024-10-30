@@ -81,17 +81,18 @@ RC OptimizeStage::handle_sql_stmt(Stmt* stmt, unique_ptr<PhysicalOperator> &phys
 
   ASSERT(logical_operator, "logical operator is null");
 
-  rc = rewrite(logical_operator);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to rewrite plan. rc=%s", strrc(rc));
-    return rc;
-  }
+  //注释掉这里的重写和优化，因为会导致某些语句出现异常
+  // rc = rewrite(logical_operator);
+  // if (rc != RC::SUCCESS) {
+  //   LOG_WARN("failed to rewrite plan. rc=%s", strrc(rc));
+  //   return rc;
+  // }
 
-  rc = optimize(logical_operator);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to optimize plan. rc=%s", strrc(rc));
-    return rc;
-  }
+  // rc = optimize(logical_operator);
+  // if (rc != RC::SUCCESS) {
+  //   LOG_WARN("failed to optimize plan. rc=%s", strrc(rc));
+  //   return rc;
+  // }
 
   // 原本的handle_request方法中，生成逻辑计划时，会考虑是否use chunk,但是这里没有考虑，题目里面应该也不会涉及到这个
   rc = physical_plan_generator_.create(*logical_operator, physical_operator);
