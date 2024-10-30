@@ -91,11 +91,8 @@ RC ParseStage::check_match_in_comparison_with_subquery(ParsedSqlNode* parsed_sql
           return RC::INTERNAL;
         }
       }
-      else { //非in 和exists的比较表达式中，右边的子查询必须有聚合函数（因为这个项目目前不支持limit，除了聚合函数，没有方法可以限制右侧返回的一定是标量）
-        if(subquery_expressions.size() == 1 && subquery_expressions[0]->type() == ExprType::UNBOUND_AGGREGATION) {
-          is_match = true;
-        }
-        else {
+      else { //非in 和exists的比较表达式中，右边的子查询select后面必须只有一个表达式
+        if(subquery_expressions.size() != 1 ) {
           is_match = false;
           return RC::INTERNAL;
         }

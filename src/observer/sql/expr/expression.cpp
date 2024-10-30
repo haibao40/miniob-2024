@@ -1192,25 +1192,39 @@ RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
       return rc;
     }
     rc = physical_operator_->next();
-    if(rc != RC::SUCCESS) {
-      LOG_ERROR("执行子查询时，通过next()方法获取数据失败");
+    Value value_temp;
+    vector<Value> value_list;
+    while (rc == RC::SUCCESS) {
+      Tuple* current_tuple = physical_operator_->current_tuple();
+      if(current_tuple->cell_num() != 1) {
+        LOG_ERROR("在执行标量子查询的过程中，子查询单次next方法返回的值不是1个，即没有返回数据或者返回了一行数据，SQL不合法");
+        rc = physical_operator_->close();
+        if(rc != RC::SUCCESS) {
+          LOG_ERROR("关闭子查询物理算子失败");
+        }
+        return RC::INVALID_ARGUMENT;
+      }
+      current_tuple->cell_at(0, value_temp);
+      value_list.push_back(value_temp);
+      rc = physical_operator_->next();
+    }
+    if(rc == RC::RECORD_EOF) {
+      rc = RC::SUCCESS;
+    }
+    else if(rc != RC::SUCCESS) {
+      LOG_ERROR("子查询在执行过程中出现异常情况");
       physical_operator_->close();
       return rc;
     }
-    Tuple* current_tuple = physical_operator_->current_tuple();
-    //这个get_value方法是标量子查询，所以只有一个值,这里将值保存到signal_result_value_，方便之后重复使用
-    rc = current_tuple->cell_at(0, signal_result_value_);  //这个get_value方法是标量子查询，所以只有一个值
-    if(rc != RC::SUCCESS) {
-      if(rc == RC::RECORD_EOF) { //TODO:这里可能有问题，感觉标量子查询中不会出现这种子查询结果为空的情况，万一遇到了再进行处理
-        physical_operator_->close();
-        return rc;
+    if(value_list.size() != 1) {
+      LOG_ERROR("在执行标量子查询的过程中，子查询实际返回了%d个值，SQL不合法", (int)value_list.size());
+      rc = physical_operator_->close();
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("关闭子查询物理算子失败");
       }
-      else {
-        LOG_ERROR("从子查询返回的tuple中获取值失败");
-        physical_operator_->close();
-        return rc;
-      }
+      return RC::INVALID_ARGUMENT;
     }
+    signal_result_value_ = value_list[0];
     physical_operator_->close();
     non_correlated_query_completed = true;  //修改标志位，避免非相关子查询多次执行
     value = signal_result_value_;
