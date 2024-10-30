@@ -215,6 +215,8 @@ struct CreateIndexSqlNode
   std::string index_name;      ///< Index name
   std::string relation_name;   ///< Relation name
   std::string attribute_name;  ///< Attribute name
+  std::vector<std::string> attribute_names; //可以在多个字段上建立索引
+  bool unique; //这里应该有一个索引类型,支持唯一
 };
 
 /**

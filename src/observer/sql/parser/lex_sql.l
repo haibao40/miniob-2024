@@ -137,6 +137,7 @@ JOIN                                    RETURN_TOKEN(JOIN);
 L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);
 COSINE_DISTANCE                         RETURN_TOKEN(COSINE_DISTANCE);
 INNER_PRODUCT                           RETURN_TOKEN(INNER_PRODUCT);
+UNIQUE                                  RETURN_TOKEN(UNIQUE);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

@@ -146,6 +146,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         INNER
         JOIN
         AS
+        UNIQUE // 唯一索引
         LEFT_BRACKET     //左方括号[,用于支持使用列表表示向量
         RIGHT_BRACKET    //右方括号],用于支持使用列表表示向量
         L2_DISTANCE      //向量函数L2_DISTANCE
@@ -173,6 +174,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   char *                                     string;
   int                                        number;
   float                                      floats;
+  bool                                       bools;
 }
 
 %token <number> NUMBER
@@ -230,7 +232,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <sql_node>            command_wrapper
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
-
+%type <bools>               index_type
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
@@ -321,18 +323,27 @@ desc_table_stmt:
       free($2);
     }
     ;
-
+// 标记是否为唯一索引
+index_type:
+  {
+      $$ = false;
+  }| UNIQUE{
+      $$ = true;
+  }
+  ;
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE index_type INDEX ID ON ID LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
-      create_index.index_name = $3;
-      create_index.relation_name = $5;
-      create_index.attribute_name = $7;
-      free($3);
-      free($5);
-      free($7);
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.attribute_names.swap(*$8);
+      create_index.unique = $2;
+      free($4);
+      free($6);
+      //free($2);
+      delete($8);
     }
     ;
 
