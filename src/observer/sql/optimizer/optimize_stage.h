@@ -38,6 +38,11 @@ class OptimizeStage
 {
 public:
   RC handle_request(SQLStageEvent *event);
+  /***
+   * @author haijun
+   * @brief 原有的handle_request 方法，是面向request的，这里为了方便处理子查询，单独封装一个针对stmt的optimize流程
+   */
+  RC handle_sql_stmt(Stmt* stmt, unique_ptr<PhysicalOperator> &physical_operator);
 
 private:
   /**

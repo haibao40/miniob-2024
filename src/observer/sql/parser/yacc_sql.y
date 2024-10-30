@@ -151,6 +151,9 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         L2_DISTANCE      //向量函数L2_DISTANCE
         COSINE_DISTANCE  //向量函数COSINE_DISTANCE
         INNER_PRODUCT    //向量函数INNER_PRODUCT
+        IN_T
+        EXISTS_T
+
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -702,6 +705,9 @@ expression:
     | COUNT LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
     }
+    | LBRACE select_stmt RBRACE {
+      $$ = new UnboundSubqueryExpr($2);
+    }
     ;
 
 rel_attr:
@@ -987,6 +993,10 @@ comp_op:
     | NOT LIKE { $$ = NOT_LIKE_TO; }
     | IS_ { $$ = IS ;}
     | IS_ NOT { $$ = IS_NOT ;}
+    | IN_T { $$ = IN ; }
+    | NOT IN_T { $$ = NOT_IN ; }
+    | EXISTS_T { $$ = EXISTS ; }
+    | NOT EXISTS_T { $$ = NOT_EXISTS ; }
     ;
 
 group_by:

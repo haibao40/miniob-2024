@@ -124,6 +124,8 @@ FORMAT                                  RETURN_TOKEN(FORMAT);
 NOT                                     RETURN_TOKEN(NOT);
 LIKE                                    RETURN_TOKEN(LIKE);
 IS                                      RETURN_TOKEN(IS_);
+IN                                      RETURN_TOKEN(IN_T);
+EXISTS                                  RETURN_TOKEN(EXISTS_T);
 NULL                                    RETURN_TOKEN(NULL_T);
 MAX                                     RETURN_TOKEN(MAX);
 MIN                                     RETURN_TOKEN(MIN);

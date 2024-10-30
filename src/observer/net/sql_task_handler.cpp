@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "event/session_event.h"
 #include "event/sql_event.h"
 #include "session/session.h"
+#include "common/global_variable.h"
 
 RC SqlTaskHandler::handle_event(Communicator *communicator)
 {
@@ -57,6 +58,10 @@ RC SqlTaskHandler::handle_event(Communicator *communicator)
 
 RC SqlTaskHandler::handle_sql(SQLStageEvent *sql_event)
 {
+  //设置全局变量,方便在执行子查询的时候可以比较方便的拿到这些全局对象，避免一层一层的传递参数
+  GlobalVariable::db  = sql_event->session_event()->session()->get_current_db(); //将当前的数据库对象设置为全局变量
+  GlobalVariable::trx = sql_event->session_event()->session()->current_trx();    //将当前的事务对象设置为全局变量
+
   RC rc = query_cache_stage_.handle_request(sql_event);
   if (OB_FAIL(rc)) {
     LOG_TRACE("failed to do query cache. rc=%s", strrc(rc));

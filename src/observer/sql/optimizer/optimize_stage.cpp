@@ -67,6 +67,43 @@ RC OptimizeStage::handle_request(SQLStageEvent *sql_event)
   return rc;
 }
 
+RC OptimizeStage::handle_sql_stmt(Stmt* stmt, unique_ptr<PhysicalOperator> &physical_operator)
+{
+  unique_ptr<LogicalOperator> logical_operator;
+
+  RC rc = logical_plan_generator_.create(stmt, logical_operator);
+  if (rc != RC::SUCCESS) {
+    if (rc != RC::UNIMPLEMENTED) {
+      LOG_WARN("failed to create logical plan. rc=%s", strrc(rc));
+    }
+    return rc;
+  }
+
+  ASSERT(logical_operator, "logical operator is null");
+
+  rc = rewrite(logical_operator);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to rewrite plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  rc = optimize(logical_operator);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to optimize plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  // 原本的handle_request方法中，生成逻辑计划时，会考虑是否use chunk,但是这里没有考虑，题目里面应该也不会涉及到这个
+  rc = physical_plan_generator_.create(*logical_operator, physical_operator);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to generate physical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  return rc;
+}
+
+
 RC OptimizeStage::optimize(unique_ptr<LogicalOperator> &oper)
 {
   // do nothing

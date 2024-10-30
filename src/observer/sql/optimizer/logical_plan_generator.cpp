@@ -42,6 +42,12 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression_iterator.h"
 
+#include "sql/optimizer/optimize_stage.h"
+
+#include <regex>
+
+class PhysicalOperator;
+
 using namespace std;
 using namespace common;
 
@@ -241,8 +247,9 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
                                     : static_cast<Expression *>(new ValueExpr(filter_obj_left.value))));
     }
 
-    //比较表达式左右两边类型不一致，且都不为null的情况下，要进行类型转换
-    if(left->value_type() != right->value_type() && left->value_type() != AttrType::NULLS && right->value_type() != AttrType::NULLS)
+    //比较表达式左右两边类型不一致，且都不为null，都不是子查询的情况下，要进行类型转换
+    if(left->value_type() != right->value_type() && left->value_type() != AttrType::NULLS && right->value_type() != AttrType::NULLS
+      && left->type() != ExprType::SUBQUERY && right->type() != ExprType::SUBQUERY)
     {
       auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
       auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
@@ -285,6 +292,18 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
     cmp_exprs.emplace_back(cmp_expr);
   }
 
+  //TODO:子查询生成物理计划的时间比外层查询早，只是单纯不想再到物理计划生成里面再去修改一次了，后面如果有问题再调整
+  //处理子查询表达式，生成子查询对应的物理计划（之后，外层查询生成物理计划的时候，就不再单独处理子查询了，因为这里已经生成了物理计划）
+  for (auto &expr : cmp_exprs) {
+    ComparisonExpr *cmp_expr = static_cast<ComparisonExpr *>(expr.get());
+    if(cmp_expr->left()->type() == ExprType::SUBQUERY) {
+      create_sub_query_physicalOperator_plan((SubqueryExpr*) cmp_expr->left().get());
+    }
+    if(cmp_expr->right()->type() == ExprType::SUBQUERY) {
+      create_sub_query_physicalOperator_plan((SubqueryExpr*) cmp_expr->right().get());
+    }
+  }
+
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
     unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
@@ -293,6 +312,20 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 
   logical_operator = std::move(predicate_oper);
   return rc;
+}
+
+RC LogicalPlanGenerator::create_sub_query_physicalOperator_plan(SubqueryExpr* subquery_expr)
+{
+  RC rc = RC::SUCCESS;
+  OptimizeStage optimizeStage;
+  unique_ptr<PhysicalOperator> physical_operator;
+  rc = optimizeStage.handle_sql_stmt(subquery_expr->select_stmt(), physical_operator);
+  if(rc != RC::SUCCESS) {
+    LOG_WARN("为子查询生成物理计划失败");
+    return rc;
+  }
+  subquery_expr->set_physical_operator(physical_operator.release());
+  return  rc;
 }
 
 int LogicalPlanGenerator::implicit_cast_cost(AttrType from, AttrType to)

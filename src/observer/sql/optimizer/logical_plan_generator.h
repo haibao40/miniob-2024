@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "common/type/attr_type.h"
+#include "sql/expr/expression.h"
 
 class Stmt;
 class CalcStmt;
@@ -28,6 +29,7 @@ class DeleteStmt;
 class UpdateStmt;
 class ExplainStmt;
 class LogicalOperator;
+class PhysicalOperator;
 
 class LogicalPlanGenerator
 {
@@ -48,6 +50,9 @@ private:
 
   RC create_group_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_order_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
+
+  //这里是直接为子查询生成物理算子,生成的物理算子存放在子查询的物理算子中属性中
+  RC create_sub_query_physicalOperator_plan(SubqueryExpr* subquery_expr);
 
   int implicit_cast_cost(AttrType from, AttrType to);
 };

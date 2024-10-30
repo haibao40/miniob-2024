@@ -96,6 +96,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     FilterObj filter_obj(condition.left_expr);
 
     BinderContext binder_context;
+    binder_context.set_db(db);  //将db存入binder_context，方便之后让子查询执行resolve流程时获取db
     for(const auto &name_table :*tables){
       Table* table = name_table.second;
       binder_context.add_table(table);
@@ -130,6 +131,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     FilterObj filter_obj(condition.right_expr);
 
     BinderContext binder_context;
+    binder_context.set_db(db);
     for(const auto &name_table :*tables){
       Table* table = name_table.second;
       binder_context.add_table(table);

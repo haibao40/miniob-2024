@@ -19,6 +19,8 @@ See the Mulan PSL v2 for more details. */
 #include <stack>
 #include <cmath>
 #include <common/type/null_type.h>
+#include "common/global_variable.h"
+#include "sql/operator/physical_operator.h"
 
 using namespace std;
 
@@ -392,10 +394,20 @@ RC ComparisonExpr::try_get_value(Value &cell) const
 
 RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 {
+  RC rc = RC::SUCCESS;
   Value left_value;
   Value right_value;
 
-  RC rc = left_->get_value(tuple, left_value);
+  //对于列子查询的情况，需要调用子查询表达另外的函数去获取子查询的执行结果,对于标量子查询，可以像普通的表达式一样走get_value
+  //由于列子查询只会出现在in 或者exists 的右侧，所有这里只是对右侧进行判断
+  vector<CompOp> subquery_comp_ops = {IN,NOT_IN,EXISTS,NOT_EXISTS};
+  if(right_->type() == ExprType::SUBQUERY
+    && std::find(subquery_comp_ops.begin(), subquery_comp_ops.end(), comp_) != subquery_comp_ops.end()) {
+    rc = compare_with_column_subquery(tuple, value);
+    return rc;
+  }
+
+  rc = left_->get_value(tuple, left_value);
   if(rc == RC::DIVIDE_ZERO){
     value.set_boolean(false);
     return RC::SUCCESS;
@@ -473,6 +485,67 @@ RC ComparisonExpr::compare_column(const Column &left, const Column &right, std::
   }
   return rc;
 }
+
+
+RC ComparisonExpr::in_value_list(const Value& left, const vector<Value>& value_list, Value &value) const
+{
+  value.set_boolean(false);
+  if(left.attr_type() != AttrType::NULLS) { //left 不是null的情况
+    for(auto right: value_list) {
+      if(left.compare(right) == 0) {
+        value.set_boolean(true);
+      }
+    }
+  }
+  else {  //left 是null的情况
+    for(auto right: value_list) {
+      if(right.attr_type() == AttrType::NULLS) {
+        value.set_boolean(true);
+      }
+    }
+  }
+  return RC::SUCCESS;
+}
+
+RC ComparisonExpr::compare_with_column_subquery(const Tuple& tuple, Value& value) const
+{
+  RC rc = RC::SUCCESS;
+  SubqueryExpr* subquery_expr = (SubqueryExpr* ) right_.get();
+  vector<Value> value_list;
+  rc = subquery_expr->get_value_list(tuple, value_list);
+  if(rc != RC::SUCCESS) {
+    LOG_ERROR("比较表达式求值过程中，获取子查询结果失败");
+    return rc;
+  }
+  if(comp_ == EXISTS) {
+    value_list.size() > 0 ? value.set_boolean(true): value.set_boolean(false);
+  }
+  else if(comp_ == NOT_EXISTS) {
+    value_list.size() == 0 ? value.set_boolean(true): value.set_boolean(false);
+  }
+  else {
+    Value left_value;
+    rc = left_->get_value(tuple, left_value);
+    if(rc == RC::DIVIDE_ZERO){
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+      return rc;
+    }
+    if(comp_ == IN) {
+      rc = in_value_list(left_value, value_list, value);
+    }
+    else if(comp_ == NOT_IN){
+      rc = in_value_list(left_value, value_list, value);
+      bool result = value.get_boolean();
+      value.set_boolean(!result);
+    }
+  }
+  return rc;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ConjunctionExpr::ConjunctionExpr(Type type, vector<unique_ptr<Expression>> &children)
@@ -966,53 +1039,52 @@ float VectorFunctionExpr::cosine_distance(const std::vector<float>& left_vector,
     norm_right = std::sqrt(norm_right);
 
     if (norm_left == 0.0 || norm_right == 0.0) {
-        return 1.0; // 如果任一向量的范数为0，余弦距离为1
+      return 1.0;  // 如果任一向量的范数为0，余弦距离为1
     }
 
     float cosine_similarity = dot_product / (norm_left * norm_right);
     return 1.0f - cosine_similarity;
 }
 
-float VectorFunctionExpr::inner_product(const std::vector<float>& left_vector, const std::vector<float>& right_vector) {
-    float result = 0.0f;
-    for (size_t i = 0; i < left_vector.size(); ++i) {
-        result += left_vector[i] * right_vector[i];
-    }
-    return result;
+float VectorFunctionExpr::inner_product(const std::vector<float> &left_vector, const std::vector<float> &right_vector)
+{
+  float result = 0.0f;
+  for (size_t i = 0; i < left_vector.size(); ++i) {
+    result += left_vector[i] * right_vector[i];
+  }
+  return result;
 }
 
 RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_value, Value &value) const
 {
   RC rc = RC::SUCCESS;
 
-  //进行类型转换，将不是vector类型的转换成vector类型
+  // 进行类型转换，将不是vector类型的转换成vector类型
   Value left_vector_value;
   Value right_vector_value;
-  if(left_value.attr_type() != AttrType::VECTORS){
+  if (left_value.attr_type() != AttrType::VECTORS) {
     RC rc = Value::cast_to(left_value, AttrType::VECTORS, left_vector_value);
-    if(rc != RC::SUCCESS){
+    if (rc != RC::SUCCESS) {
       return rc;
     }
-  }
-  else{
+  } else {
     left_vector_value = left_value;
   }
-  if(right_value.attr_type() != AttrType::VECTORS){
+  if (right_value.attr_type() != AttrType::VECTORS) {
     RC rc = Value::cast_to(right_value, AttrType::VECTORS, right_vector_value);
-    if(rc != RC::SUCCESS){
+    if (rc != RC::SUCCESS) {
       return rc;
     }
-  }
-  else{
+  } else {
     right_vector_value = right_value;
   }
-  //执行计算逻辑
-  float result = 0;
-  auto vector_left = left_vector_value.get_vector();
-  auto vector_right = right_vector_value.get_vector();
+  // 执行计算逻辑
+  float result       = 0;
+  auto  vector_left  = left_vector_value.get_vector();
+  auto  vector_right = right_vector_value.get_vector();
   switch (vector_function_type_) {
     case VECTOR_FUNCTION::L2_DISTANCE: {
-      result =  l2_distance(vector_left, vector_right);
+      result = l2_distance(vector_left, vector_right);
     } break;
 
     case VECTOR_FUNCTION::COSINE_DISTANCE: {
@@ -1030,5 +1102,107 @@ RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_va
   }
   value.set_type(AttrType::FLOATS);
   value.set_data((char *) &result, 4);
+  return rc;
+}
+
+
+RC SubqueryExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  RC rc = RC::SUCCESS;
+  if(!is_correlated) { //非相关子查询获取结果
+    rc = get_signal_value_in_non_correlated_query(value);
+  }
+  else {  //相关子查询获取结果，暂时未实现
+    rc = RC::UNIMPLEMENTED;
+  }
+  return rc;
+}
+
+RC SubqueryExpr::get_value_list(const Tuple &tuple, vector<Value>& vector) const
+{
+  RC rc = RC::SUCCESS;
+  if(!is_correlated) { //非相关子查询获取结果
+    rc = get_value_list_in_non_correlated_query(vector);
+  }
+  else {  //相关子查询获取结果，暂时未实现
+    rc = RC::UNIMPLEMENTED;
+  }
+  return rc;
+}
+
+
+RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
+{
+  RC rc = RC::SUCCESS;
+  if(non_correlated_query_completed) { //非相关子查询已经执行过，直接返回结果
+    value = signal_result_value_;
+  }
+  else {
+    //子查询还未执行，执行子查询
+    rc =physical_operator_->open(GlobalVariable::trx);
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("执行子查询时，打开子查询的物理算子失败");
+      return rc;
+    }
+    rc = physical_operator_->next();
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("执行子查询时，通过next()方法获取数据失败");
+      physical_operator_->close();
+      return rc;
+    }
+    Tuple* current_tuple = physical_operator_->current_tuple();
+    //这个get_value方法是标量子查询，所以只有一个值,这里将值保存到signal_result_value_，方便之后重复使用
+    rc = current_tuple->cell_at(0, signal_result_value_);  //这个get_value方法是标量子查询，所以只有一个值
+    if(rc != RC::SUCCESS) {
+      if(rc == RC::RECORD_EOF) { //TODO:这里可能有问题，感觉标量子查询中不会出现这种子查询结果为空的情况，万一遇到了再进行处理
+        physical_operator_->close();
+        return rc;
+      }
+      else {
+        LOG_ERROR("从子查询返回的tuple中获取值失败");
+        physical_operator_->close();
+        return rc;
+      }
+    }
+    physical_operator_->close();
+    non_correlated_query_completed = true;  //修改标志位，避免非相关子查询多次执行
+    value = signal_result_value_;
+  }
+  return rc;
+}
+
+RC SubqueryExpr::get_value_list_in_non_correlated_query(vector<Value>& value_list) const
+{
+  RC rc = RC::SUCCESS;
+  if(non_correlated_query_completed) { //非相关子查询已经执行过，直接返回结果
+    value_list.insert(value_list.begin(), vec_result_values_.begin(), vec_result_values_.end());
+  }
+  else {
+    //子查询还未执行，执行子查询
+    rc =physical_operator_->open(GlobalVariable::trx);
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("执行子查询时，打开子查询的物理算子失败");
+      return rc;
+    }
+    //这个方法是列子查询，所以有多个值,这里将值保存到vec_result_values_，方便之后重复使用
+    rc = physical_operator_->next();
+    Value value;
+    while (rc == RC::SUCCESS) {
+      Tuple* current_tuple = physical_operator_->current_tuple();
+      current_tuple->cell_at(0, value);  //列子查询，所以每次next只有一个值
+      vec_result_values_.push_back(value);
+      rc = physical_operator_->next();
+    }
+    if(rc == RC::RECORD_EOF) {     //列子查询正常结束
+      rc = RC::SUCCESS;
+    }
+    else if(rc != RC::SUCCESS) {   //列子查询执行过程中出错
+      LOG_ERROR("列子查询在执行过程中出现异常情况");
+      physical_operator_->close();
+      return rc;
+    }
+    non_correlated_query_completed = true;  //修改标志位，避免非相关子查询多次执行
+    value_list.insert(value_list.begin(), vec_result_values_.begin(), vec_result_values_.end());
+  }
   return rc;
 }
