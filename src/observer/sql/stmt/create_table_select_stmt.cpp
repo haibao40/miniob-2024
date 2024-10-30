@@ -36,6 +36,7 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &create_table_
   }
 
   std::vector<AttrInfoSqlNode> attr_infos;
+  std::vector<AttrInfoSqlNode> create_attr_infos = create_table_select_sql.attr_infos;
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
   for(unique_ptr<Expression> &expression:query_expressions){
     if(expression.get()->type() == ExprType::FIELD){
@@ -50,6 +51,15 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &create_table_
         attr_info.visible  = fieldmeta->visible();
         attr_infos.push_back(attr_info);
     }
+  }
+  if(attr_infos.size() != create_attr_infos.size()){
+    return RC::WRONG_ATTR;
+  }
+  for(size_t i = 0; i < attr_infos.size(); i++){
+    if(!(attr_infos[i] == create_attr_infos[i])){
+        return RC::WRONG_ATTR; //要新建的表字段属性和拿到的字段属性不一致,除了名字以外，其他的都需要相等
+    }
+    attr_infos[i].name = create_attr_infos[i].name;//以建表属性名为准
   }
 
   //开始建表,因为一次只能执行一句sql语句，所以在resolve层就建表实属无奈

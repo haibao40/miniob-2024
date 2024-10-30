@@ -166,6 +166,12 @@ struct AttrInfoSqlNode
   bool        not_null;///< not null限制，等于true时，表示该字段不允许设置null值
   bool        visible = true; ///< 是否可见，等于true时，表示该字段是可见的，否则不可见,是系统隐藏字段
 
+  //设置==，对比两个attrinfosqlnode是否相等
+  bool operator==(const AttrInfoSqlNode& other) const{
+    return this->type == other.type && this->length == other.length
+           && this->not_null == other.not_null && this->visible == other.visible;
+  }
+
   /***
    * @brief 设置char 类型的存储长度
    * @param user_len 用户定义的长度
@@ -295,6 +301,8 @@ struct ErrorSqlNode
 struct CreateTableSelectSqlNode
 {
   std::string table_name;
+  std::vector<AttrInfoSqlNode> attr_infos;      ///< attributes
+  std::string                  storage_format;  ///< storage format
   ParsedSqlNode* sql_node;
 };
 

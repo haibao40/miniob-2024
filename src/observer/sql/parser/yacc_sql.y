@@ -556,6 +556,28 @@ create_table_select_stmt:      /*  create_table_select 语句的语法解析树*
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
       $$->create_table_select.table_name    = $3;
       $$->create_table_select.sql_node      = $5; 
+      free($3);
+    }
+    | CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format select_stmt
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      $$->create_table_select.table_name    = $3;
+      free($3);
+
+      std::vector<AttrInfoSqlNode> *src_attrs = $6;
+
+      if (src_attrs != nullptr) {
+        $$->create_table_select.attr_infos.swap(*src_attrs);
+        delete src_attrs;
+      }
+      $$->create_table_select.attr_infos.emplace_back(*$5);
+      std::reverse($$->create_table_select.attr_infos.begin(), $$->create_table_select.attr_infos.end());
+      delete $5;
+      if ($8 != nullptr) {
+        $$->create_table_select.storage_format = $8;
+        free($8);
+      }
+      $$->create_table_select.sql_node      = $9; 
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
