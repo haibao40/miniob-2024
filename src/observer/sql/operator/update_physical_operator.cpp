@@ -70,6 +70,13 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     //   LOG_WARN("not find");
     //   return rc;
     // }
+    Value datavalue;
+    if(valuetmp.attr_type() == AttrType::DATES && value_.attr_type() == AttrType::CHARS){
+      
+      if(value_.cast_to(value_,AttrType::DATES,datavalue)==RC::SUCCESS){
+        value_ = datavalue;
+      }
+    }
     if(valuetmp.attr_type() != value_.attr_type() && value_.attr_type() != AttrType::NULLS){
       LOG_WARN("type is not right");
       return RC::NOT_EXIST;

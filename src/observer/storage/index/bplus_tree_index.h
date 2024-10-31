@@ -26,14 +26,15 @@ class BplusTreeIndex : public Index
 public:
   BplusTreeIndex() = default;
   virtual ~BplusTreeIndex() noexcept;
-
+  RC create(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_meta);
   RC create(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
   RC open(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
   RC close();
 
   RC insert_entry(const char *record, const RID *rid) override;
   RC delete_entry(const char *record, const RID *rid) override;
-
+  RC open(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_metas);
+  const char* create_new_record(const char *record, const RID *rid);
   RC destroy() override;
 
   /**

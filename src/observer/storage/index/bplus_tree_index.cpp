@@ -19,6 +19,32 @@ See the Mulan PSL v2 for more details. */
 
 BplusTreeIndex::~BplusTreeIndex() noexcept { close(); }
 
+RC BplusTreeIndex::create(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_metas){
+  if (inited_) {
+    LOG_WARN("Failed to create index due to the index has been created before. file_name:%s, index:%s, field:%s",
+        file_name, index_meta.name(), index_meta.field());
+    return RC::RECORD_OPENNED;
+  }
+  Index::init(index_meta, field_metas);
+  BufferPoolManager &bpm = table->db()->buffer_pool_manager();
+  int length_metas = 0;
+  for(auto fieldMeta:*field_metas){
+    length_metas = length_metas + fieldMeta->len();
+  }
+  RC rc = index_handler_.create(table->db()->log_handler(), bpm, file_name, AttrType::CHARS, length_metas);
+  if (RC::SUCCESS != rc) {
+    LOG_WARN("Failed to create index_handler, file_name:%s, index:%s, field:%s, rc:%s",
+        file_name, index_meta.name(), index_meta.field(), strrc(rc));
+    return rc;
+  }
+
+  inited_ = true;
+  table_  = table;
+  LOG_INFO("Successfully create index, file_name:%s, index:%s, field:%s",
+    file_name, index_meta.name(), index_meta.field());
+  return RC::SUCCESS;
+
+}
 RC BplusTreeIndex::create(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta)
 {
   if (inited_) {
@@ -43,7 +69,28 @@ RC BplusTreeIndex::create(Table *table, const char *file_name, const IndexMeta &
     file_name, index_meta.name(), index_meta.field());
   return RC::SUCCESS;
 }
+RC BplusTreeIndex::open(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_metas){
+  if (inited_) {
+    LOG_WARN("Failed to open index due to the index has been initedd before. file_name:%s, index:%s, field:%s",
+        file_name, index_meta.name(), index_meta.field());
+    return RC::RECORD_OPENNED;
+  }
+    Index::init(index_meta, field_metas);
 
+  BufferPoolManager &bpm = table->db()->buffer_pool_manager();
+  RC rc = index_handler_.open(table->db()->log_handler(), bpm, file_name);
+  if (RC::SUCCESS != rc) {
+    LOG_WARN("Failed to open index_handler, file_name:%s, index:%s, field:%s, rc:%s",
+        file_name, index_meta.name(), index_meta.field(), strrc(rc));
+    return rc;
+  }
+
+  inited_ = true;
+  table_  = table;
+  LOG_INFO("Successfully open index, file_name:%s, index:%s, field:%s",
+    file_name, index_meta.name(), index_meta.field());
+  return RC::SUCCESS;
+}
 RC BplusTreeIndex::open(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta)
 {
   if (inited_) {
@@ -91,13 +138,33 @@ RC BplusTreeIndex::destroy()
 }
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
-{
-  return index_handler_.insert_entry(record + field_meta_.offset(), rid);
+{ 
+  //多字段索引的处理
+  //const vector<const FieldMeta *>* field_metas_;
+  const char* newRecord = create_new_record(record, rid);
+  return index_handler_.insert_entry(newRecord, rid);
 }
-
+const char* BplusTreeIndex::create_new_record(const char *record, const RID *rid){
+  //多字段索引的处理
+  //const char* newRecord;
+  int length_new_record = 0;
+  for(auto field_meta:*field_metas_){
+    length_new_record = length_new_record + field_meta.len(); //报错 field_meta好像被释放掉了
+  }
+  //string newRecordString ;
+  char* newRecord =  (char *)malloc(length_new_record * sizeof(char));
+  int current = 0;
+  for(auto &field_meta :*field_metas_){
+    for(int i=0;i<field_meta.len();i++){
+      newRecord[current] = record[field_meta.offset()+i];
+    }
+  }
+  return newRecord;
+}
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
 {
-  return index_handler_.delete_entry(record + field_meta_.offset(), rid);
+  const char* newRecord = create_new_record(record, rid);
+  return index_handler_.delete_entry(newRecord, rid);
 }
 
 IndexScanner *BplusTreeIndex::create_scanner(

@@ -36,10 +36,15 @@ public:
   IndexMeta() = default;
 
   RC init(const char *name, const FieldMeta &field);
-
+  RC init(const char *name,const vector<const FieldMeta*>&fields,bool is_unique_);
+  RC init(const char *name,const vector<FieldMeta> &fields,bool is_unique);
 public:
   const char *name() const;
   const char *field() const;
+  const std::vector<FieldMeta> *fields() const;
+  auto field_metas() const -> const std::vector<FieldMeta>                *{ return &fields_; }
+  
+  const bool is_unique() const;
 
   void desc(ostream &os) const;
 
@@ -50,4 +55,7 @@ public:
 protected:
   string name_;   // index's name
   string field_;  // field's name
+  //vector<string>* fields_;
+  std::vector<FieldMeta> fields_; 
+  bool is_unique_;
 };
