@@ -28,6 +28,9 @@ HashGroupByPhysicalOperator::HashGroupByPhysicalOperator(
 
 RC HashGroupByPhysicalOperator::open(Trx *trx)
 {
+  if(children_.empty()){
+    return RC::SUCCESS;
+  }
   ASSERT(children_.size() == 1, "group by operator only support one child, but got %d", children_.size());
 
   PhysicalOperator &child = *children_[0];

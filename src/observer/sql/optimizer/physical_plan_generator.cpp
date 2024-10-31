@@ -410,17 +410,19 @@ RC PhysicalPlanGenerator::create_plan(GroupByLogicalOperator &logical_oper, std:
         std::move(logical_oper.aggregate_expressions()));
   }
 
-  ASSERT(logical_oper.children().size() == 1, "group by operator should have 1 child");
+  //ASSERT(logical_oper.children().size() == 1, "group by operator should have 1 child");
 
-  LogicalOperator             &child_oper = *logical_oper.children().front();
-  unique_ptr<PhysicalOperator> child_physical_oper;
-  rc = create(child_oper, child_physical_oper);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create child physical operator of group by operator. rc=%s", strrc(rc));
-    return rc;
+  if(!logical_oper.children().empty()){
+    LogicalOperator             &child_oper = *logical_oper.children().front();
+    unique_ptr<PhysicalOperator> child_physical_oper;
+    rc = create(child_oper, child_physical_oper);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create child physical operator of group by operator. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    group_by_oper->add_child(std::move(child_physical_oper));
   }
-
-  group_by_oper->add_child(std::move(child_physical_oper));
 
   oper = std::move(group_by_oper);
   return rc;
