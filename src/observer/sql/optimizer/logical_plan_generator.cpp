@@ -293,7 +293,7 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
     cmp_exprs.emplace_back(cmp_expr);
   }
 
-  //TODO:子查询生成物理计划的时间比外层查询早，只是单纯不想再到物理计划生成里面再去修改一次了，后面如果有问题再调整
+  //TODO:这个阶段，外层查询正在生成逻辑计划，也就是说，子查询生成物理计划的时间比外层查询早，只是单纯不想再到物理计划生成里面再去修改一次了，后面如果有问题再调整
   //处理子查询表达式，生成子查询对应的物理计划（之后，外层查询生成物理计划的时候，就不再单独处理子查询了，因为这里已经生成了物理计划）
   for (auto &expr : cmp_exprs) {
     ComparisonExpr *cmp_expr = static_cast<ComparisonExpr *>(expr.get());
