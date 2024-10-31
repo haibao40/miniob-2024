@@ -187,7 +187,7 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   SqlResult *sql_result = event->sql_result();
 
   if (RC::SUCCESS != sql_result->return_code() || !sql_result->has_operator()) {
-    return write_state(event, need_disconnect);
+    return write_state(event, need_disconnect);  //这个地方实现了返回SUCCESS 或者failure的逻辑
   }
 
   rc = sql_result->open();
@@ -200,6 +200,87 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   const TupleSchema &schema   = sql_result->tuple_schema();
   const int          cell_num = schema.cell_num();
 
+  // 原来的代码，在执行逻辑算子取结果之前，就会先把表头发回去
+  // for (int i = 0; i < cell_num; i++) {
+  //   const TupleCellSpec &spec  = schema.cell_at(i);
+  //   const char          *alias = spec.alias();
+  //   if (nullptr != alias || alias[0] != 0) {
+  //     if (0 != i) {
+  //       const char *delim = " | ";
+  //
+  //       rc = writer_->writen(delim, strlen(delim));
+  //       if (OB_FAIL(rc)) {
+  //         LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+  //         return rc;
+  //       }
+  //     }
+  //
+  //     int len = strlen(alias);
+  //
+  //     rc = writer_->writen(alias, len);
+  //     if (OB_FAIL(rc)) {
+  //       LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+  //       sql_result->close();
+  //       return rc;
+  //     }
+  //   }
+  // }
+
+  // if (cell_num > 0) {
+  //   char newline = '\n';
+  //
+  //   rc = writer_->writen(&newline, 1);
+  //   if (OB_FAIL(rc)) {
+  //     LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+  //     sql_result->close();
+  //     return rc;
+  //   }
+  // }
+
+  rc = RC::SUCCESS;
+  if (event->session()->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR
+      && event->session()->used_chunk_mode()) {
+    rc = write_chunk_result(sql_result);
+  } else {
+    rc = write_tuple_result(sql_result);
+  }
+
+  if (OB_FAIL(rc) && rc != RC::ILLEGAL_SUB_QUERY) {  //异常的子查询，当做一种特例，不是失败
+    return rc;
+  }
+
+  if ( rc == RC::ILLEGAL_SUB_QUERY) {     //异常的子查询，要返回Failure
+    sql_result->set_return_code(RC::ILLEGAL_SUB_QUERY);
+    return write_state(event, need_disconnect);  //这个地方实现了返回SUCCESS 或者failure的逻辑
+  }
+
+  if (cell_num == 0) {
+    // 除了select之外，其它的消息通常不会通过operator来返回结果，表头和行数据都是空的
+    // 这里针对这种情况做特殊处理，当表头和行数据都是空的时候，就返回处理的结果
+    // 可能是insert/delete等操作，不直接返回给客户端数据，这里把处理结果返回给客户端
+    RC rc_close = sql_result->close();
+    if (rc == RC::SUCCESS) {
+      rc = rc_close;
+    }
+    sql_result->set_return_code(rc);
+    return write_state(event, need_disconnect);
+  } else {
+    need_disconnect = false;
+  }
+
+  RC rc_close = sql_result->close();
+  if (OB_SUCC(rc)) {
+    rc = rc_close;
+  }
+
+  return rc;
+}
+
+RC PlainCommunicator::write_result_field_header(SqlResult *sql_result)
+{
+  RC rc = RC::SUCCESS;
+  const TupleSchema &schema   = sql_result->tuple_schema();
+  const int          cell_num = schema.cell_num();
   for (int i = 0; i < cell_num; i++) {
     const TupleCellSpec &spec  = schema.cell_at(i);
     const char          *alias = spec.alias();
@@ -235,38 +316,6 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
       return rc;
     }
   }
-
-  rc = RC::SUCCESS;
-  if (event->session()->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR
-      && event->session()->used_chunk_mode()) {
-    rc = write_chunk_result(sql_result);
-  } else {
-    rc = write_tuple_result(sql_result);
-  }
-
-  if (OB_FAIL(rc)) {
-    return rc;
-  }
-
-  if (cell_num == 0) {
-    // 除了select之外，其它的消息通常不会通过operator来返回结果，表头和行数据都是空的
-    // 这里针对这种情况做特殊处理，当表头和行数据都是空的时候，就返回处理的结果
-    // 可能是insert/delete等操作，不直接返回给客户端数据，这里把处理结果返回给客户端
-    RC rc_close = sql_result->close();
-    if (rc == RC::SUCCESS) {
-      rc = rc_close;
-    }
-    sql_result->set_return_code(rc);
-    return write_state(event, need_disconnect);
-  } else {
-    need_disconnect = false;
-  }
-
-  RC rc_close = sql_result->close();
-  if (OB_SUCC(rc)) {
-    rc = rc_close;
-  }
-
   return rc;
 }
 
@@ -274,8 +323,13 @@ RC PlainCommunicator::write_tuple_result(SqlResult *sql_result)
 {
   RC rc = RC::SUCCESS;
   Tuple *tuple = nullptr;
+  int count = 0;
   while (RC::SUCCESS == (rc = sql_result->next_tuple(tuple))) {
     assert(tuple != nullptr);
+    count++;
+    if(count == 1) { // 当确定有数据的时候，才发送表头
+      write_result_field_header(sql_result);
+    }
 
     int cell_num = tuple->cell_num();
     for (int i = 0; i < cell_num; i++) {
@@ -318,6 +372,9 @@ RC PlainCommunicator::write_tuple_result(SqlResult *sql_result)
     }
   }
 
+  if(rc == RC::RECORD_EOF && count == 0) { // 当查询的结果为空时，也需要发送表头
+    write_result_field_header(sql_result);
+  }
   if (rc == RC::RECORD_EOF) {
     rc = RC::SUCCESS;
   }

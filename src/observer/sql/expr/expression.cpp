@@ -423,7 +423,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     value.set_boolean(false);
-    return RC::SUCCESS;
+    return rc;
   }
   rc = right_->get_value(tuple, right_value);
   if(rc == RC::DIVIDE_ZERO){
@@ -433,7 +433,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
     value.set_boolean(false);
-    return RC::SUCCESS;
+    return rc;
   }
 
   bool bool_value = false;
@@ -1204,7 +1204,7 @@ RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
         if(rc != RC::SUCCESS) {
           LOG_ERROR("关闭子查询物理算子失败");
         }
-        return RC::INVALID_ARGUMENT;
+        return RC::ILLEGAL_SUB_QUERY;
       }
       current_tuple->cell_at(0, value_temp);
       value_list.push_back(value_temp);
@@ -1224,7 +1224,7 @@ RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
       if(rc != RC::SUCCESS) {
         LOG_ERROR("关闭子查询物理算子失败");
       }
-      return RC::SQL_SYNTAX;
+      return RC::ILLEGAL_SUB_QUERY;
     }
     signal_result_value_ = value_list[0];
     physical_operator_->close();
