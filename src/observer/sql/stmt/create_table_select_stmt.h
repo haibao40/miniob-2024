@@ -31,6 +31,7 @@ public:
 
 public:
   static RC create(Db *db, CreateTableSelectSqlNode &create_table_select_sql, Stmt *&stmt);
+  static RC get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_expressions, std::vector<AttrInfoSqlNode>& attr_infos);
 
 public:
   SelectStmt      *select_stmt() const { return select_stmt_; }

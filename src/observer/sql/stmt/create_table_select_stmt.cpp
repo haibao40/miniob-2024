@@ -38,33 +38,9 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &create_table_
   std::vector<AttrInfoSqlNode> attr_infos;
   std::vector<AttrInfoSqlNode> create_attr_infos = create_table_select_sql.attr_infos;
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
-  for(unique_ptr<Expression> &expression:query_expressions){
-    if(expression.get()->type() == ExprType::FIELD){
-        auto expr = static_cast<FieldExpr *>(expression.get());
-        Field field = expr->field();
-        const FieldMeta* fieldmeta = field.meta();
-        AttrInfoSqlNode attr_info;
-        attr_info.length   = fieldmeta->len();
-        attr_info.name     = fieldmeta->name();
-        attr_info.not_null = fieldmeta->not_null();
-        attr_info.type     = fieldmeta->type();
-        attr_info.visible  = fieldmeta->visible();
-        attr_infos.push_back(attr_info);
-    }else if(expression.get()->type() == ExprType::STAR){
-        auto expr = static_cast<StarExpr *>(expression.get());
-        Table *table = db->find_table(expr->table_name());
-        const std::vector<FieldMeta>* fieldmetas = table->table_meta().field_metas();
-        for(auto fieldmeta:*fieldmetas){
-            AttrInfoSqlNode attr_info;
-            attr_info.length   = fieldmeta.len();
-            attr_info.name     = fieldmeta.name();
-            attr_info.not_null = fieldmeta.not_null();
-            attr_info.type     = fieldmeta.type();
-            attr_info.visible  = fieldmeta.visible();
-            attr_infos.push_back(attr_info);
-        }
-    }
-  }
+  //根据绑定好的表达式，来获取建表的字段属性
+  CreateTableSelectStmt::get_attr_infos(db, query_expressions, attr_infos);
+  
   if(0 != create_attr_infos.size() && attr_infos.size() != create_attr_infos.size()){
     return RC::WRONG_ATTR;
   }else if(0 != create_attr_infos.size() && attr_infos.size() == create_attr_infos.size()){
@@ -92,5 +68,63 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &create_table_
   create_table_select_stmt->table_                = db->find_table(create_table_select_sql.table_name.c_str());
 
   stmt                                            = create_table_select_stmt;
+  return RC::SUCCESS;
+}
+
+RC CreateTableSelectStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_expressions, std::vector<AttrInfoSqlNode>& attr_infos){
+  for(unique_ptr<Expression> &expression:query_expressions){
+    if(expression.get()->type() == ExprType::FIELD){
+        auto expr = static_cast<FieldExpr *>(expression.get());
+        Field field = expr->field();
+        const FieldMeta* fieldmeta = field.meta();
+        AttrInfoSqlNode attr_info;
+        attr_info.length   = fieldmeta->len();
+        attr_info.name     = fieldmeta->name();
+        attr_info.not_null = fieldmeta->not_null();
+        attr_info.type     = fieldmeta->type();
+        attr_info.visible  = fieldmeta->visible();
+        attr_infos.push_back(attr_info);
+    }else if(expression.get()->type() == ExprType::STAR){
+        auto expr = static_cast<StarExpr *>(expression.get());
+        Table *table = db->find_table(expr->table_name());
+        const std::vector<FieldMeta>* fieldmetas = table->table_meta().field_metas();
+        for(auto fieldmeta:*fieldmetas){
+            AttrInfoSqlNode attr_info;
+            attr_info.length   = fieldmeta.len();
+            attr_info.name     = fieldmeta.name();
+            attr_info.not_null = fieldmeta.not_null();
+            attr_info.type     = fieldmeta.type();
+            attr_info.visible  = fieldmeta.visible();
+            attr_infos.push_back(attr_info);
+        }
+    }else if(expression.get()->type() == ExprType::ARITHMETIC){
+      auto expr = static_cast<ArithmeticExpr *>(expression.get());
+      AttrInfoSqlNode attr_info;
+      attr_info.length   = expr->value_length();              
+      attr_info.name     = expr->name();
+      attr_info.not_null = false;               //默认可以取空值，实际应该对算术表达式的每个子表达式检查是否可以取空值
+      attr_info.type     = expr->value_type();  //
+      attr_info.visible  = true;                //默认可以显示
+      attr_infos.push_back(attr_info);
+    }else if(expression.get()->type() == ExprType::AGGREGATION){
+      auto expr = static_cast<AggregateExpr *>(expression.get());
+      AttrInfoSqlNode attr_info;
+      attr_info.length   = expr->value_length();
+      attr_info.name     = expr->name();
+      attr_info.not_null = false;               //默认可以取空值，实际应该对算术表达式的每个子表达式检查是否可以取空值
+      attr_info.type     = expr->value_type();  //
+      attr_info.visible  = true;                //默认可以显示
+      attr_infos.push_back(attr_info);
+    }else if(expression.get()->type() == ExprType::VALUE){
+      auto expr = static_cast<ValueExpr *>(expression.get());
+      AttrInfoSqlNode attr_info;
+      attr_info.length   = expr->value_length();
+      attr_info.name     = expr->name();
+      attr_info.not_null = false;               //默认可以取空值，实际应该对算术表达式的每个子表达式检查是否可以取空值
+      attr_info.type     = expr->value_type();  //
+      attr_info.visible  = true;                //默认可以显示
+      attr_infos.push_back(attr_info);
+    }
+  }
   return RC::SUCCESS;
 }
