@@ -39,8 +39,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   BinderContext binder_context;
-  // 当对子查询进行resolve时，需要传递db参数，这里，将db参数写入binder_context中，方便需要的时候能够拿到
-  binder_context.set_db(db);
 
   // collect tables in `from` statement
   vector<Table *>                tables;

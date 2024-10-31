@@ -26,17 +26,12 @@ public:
 
   void add_table(Table *table) { query_tables_.push_back(table); }
 
-  void set_db(Db* db) { db_ = db; }
-
-  Db* get_db() {return db_;}
-
   Table *find_table(const char *table_name) const;
 
   const std::vector<Table *> &query_tables() const { return query_tables_; }
 
 private:
   std::vector<Table *> query_tables_;
-  Db*                  db_ = nullptr;    //新增一个db参数，方便对子查询表达式进行resolve时，可以拿到当前的数据库
 };
 
 /**

@@ -200,7 +200,7 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   const TupleSchema &schema   = sql_result->tuple_schema();
   const int          cell_num = schema.cell_num();
 
-  // 原来的代码，在执行逻辑算子取结果之前，就会先把表头发回去
+  // 原来的代码，在执行逻辑算子取结果之前，就会先把表头发回去,这里为了兼容子查询在执行阶段返回failure，所以这里先不发表头
   // for (int i = 0; i < cell_num; i++) {
   //   const TupleCellSpec &spec  = schema.cell_at(i);
   //   const char          *alias = spec.alias();
