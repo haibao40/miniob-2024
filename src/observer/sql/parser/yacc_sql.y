@@ -165,6 +165,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   RelAttrSqlNode *                           rel_attr;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  UpdateUnite *                              update_unite;
+  std::vector<UpdateUnite> *                 update_unite_list;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   std::vector<Value> *                       value_list;
@@ -196,6 +198,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
+%type <update_unite>        update_unite
+%type <update_unite_list>   update_unite_list
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
@@ -539,18 +543,43 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
+    UPDATE ID SET update_unite update_unite_list where
     {
+      printf("解析update语句");
       $$ = new ParsedSqlNode(SCF_UPDATE);
-      $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+      $$->update.table_name = $2;
+      if($5 != nullptr){
+        $$->update.update_unites.swap(*$5);
       }
-      free($2);
-      free($4);
+      $$->update.update_unites.push_back(*$4);
+      $$->update.conditions.swap(*$6);
+    }
+    ;
+update_unite_list:
+    /* empty */
+    {
+      printf("解析空的 unite list");
+      $$ = nullptr;
+    }
+    | COMMA update_unite update_unite_list
+    {
+      printf("解析不是空的 unite list");
+      if($3 != nullptr){
+        $$ = $3;
+      }
+      else{
+        $$ = new std::vector<UpdateUnite>;
+      }
+      $$->push_back(*$2);
+    }
+    ;
+update_unite:
+    ID EQ expression
+    {
+      printf("解析update unite");
+      $$ = new UpdateUnite();
+      $$->field_name = $1;
+      $$->expression = $3;
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
@@ -706,6 +735,7 @@ expression:
       $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
     }
     | LBRACE select_stmt RBRACE {
+      printf("解析子查询");
       $$ = new UnboundSubqueryExpr($2);
     }
     | LBRACE value value_list RBRACE{

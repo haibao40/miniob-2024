@@ -143,15 +143,23 @@ struct DeleteSqlNode
   std::vector<ConditionSqlNode> conditions;
 };
 
+/***
+ * @brief 用来描述update语句中，对单个字段的更新操作
+ */
+struct UpdateUnite
+{
+  std::string field_name;      //要更新的字段
+  Expression* expression;      //更新后的值，是一个表达式，目前，只支持常量表达式，非相关子查询表达式
+};
+
 /**
  * @brief 描述一个update语句
  * @ingroup SQLParser
  */
 struct UpdateSqlNode
 {
-  std::string                   relation_name;   ///< Relation to update
-  std::string                   attribute_name;  ///< 更新的字段，仅支持一个字段
-  Value                         value;           ///< 更新的值，仅支持一个字段
+  std::string                   table_name;   ///<   要更新的表
+  std::vector<UpdateUnite>      update_unites;   /// 要更新的字段以及对应的值
   std::vector<ConditionSqlNode> conditions;
 };
 
