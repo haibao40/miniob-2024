@@ -91,6 +91,9 @@ int IntegerType::cast_cost(AttrType type)
   else if(type == AttrType::FLOATS) {
     return 1;
   }
+  else if(type == AttrType::CHARS) {
+    return 3;
+  }
   return INT32_MAX;
 }
 
@@ -103,6 +106,10 @@ RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
       float res = (float)i;
       Value value(res);
       result = value;
+    } break;
+    case AttrType::CHARS: {
+      std::string str = std::to_string(val.get_int());
+      result.set_string(str.c_str(), str.size());
     } break;
     default: return RC::UNIMPLEMENTED;
   }

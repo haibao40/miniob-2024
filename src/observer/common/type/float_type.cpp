@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/type/float_type.h"
 #include "common/value.h"
 #include "common/lang/limits.h"
+#include <cmath>
 #include "common/value.h"
 
 int FloatType::compare(const Value &left, const Value &right) const
@@ -92,4 +93,23 @@ int FloatType::cast_cost(AttrType type){
     return 2;
   }
   return INT32_MAX;
+}
+
+RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  RC rc = RC::SUCCESS;
+  if(val.attr_type_ != AttrType::FLOATS) {
+    LOG_WARN("这是将浮点数转换为其它类型的方法，val参数必须是浮点类型");
+    return RC::UNSUPPORTED;
+  }
+  switch (type) {
+    case AttrType::INTS: {
+      int rounded_num = std::round(val.get_float()); //这里浮点数转int,采用是四舍五入法，update_select中有这种测试样例
+      result.set_int(rounded_num);
+    }break;
+    default: {
+      return RC::UNSUPPORTED;
+    }
+  }
+  return rc;
 }

@@ -26,6 +26,8 @@ public:
 
   int cast_cost(AttrType type) override;
 
+  RC cast_to(const Value &val, AttrType type, Value &result) const override;
+
   RC add(const Value &left, const Value &right, Value &result) const override;
   RC subtract(const Value &left, const Value &right, Value &result) const override;
   RC multiply(const Value &left, const Value &right, Value &result) const override;

@@ -24,7 +24,10 @@ public:
 
   int compare(const Value &left, const Value &right) const override;
 
-  int cast_cost(AttrType type) override; //可以转化为float，其他的都是无穷大
+  /***
+   * @brief 可以转换为float和chars
+   */
+  int cast_cost(AttrType type) override;
   RC cast_to(const Value &val, AttrType type, Value &result) const override;
 
   RC add(const Value &left, const Value &right, Value &result) const override;
