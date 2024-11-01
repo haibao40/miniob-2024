@@ -121,7 +121,7 @@ RC BplusTreeIndex::get_entry(const char * record , list<RID> &rids){
   for(auto field_meta:*field_metas_){
     length_new_record = length_new_record + field_meta.len(); //报错 field_meta好像被释放掉了
   }
-  return index_handler_.get_entry(newRecord,strlen(newRecord),rids);
+  return index_handler_.get_entry(newRecord,length_new_record,rids);
 }
 RC BplusTreeIndex::close()
 {
