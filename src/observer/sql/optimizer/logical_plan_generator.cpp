@@ -350,12 +350,7 @@ RC LogicalPlanGenerator::create_plan(InsertStmt *insert_stmt, unique_ptr<Logical
 RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   Table         *table       = update_stmt->table();
-  const char  *field_name = update_stmt->Attr_name().c_str();
   FilterStmt    *filter_stmt  = update_stmt->filter_stmt();
-  Value value = (update_stmt->value());
-  
-  // vector<Value> values;
-  // values.push_back(value);
 
   unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
   unique_ptr<LogicalOperator> predicate_oper;
@@ -365,7 +360,21 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     return rc;
   }
 
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, field_name, value));
+  //处理update 中可能包含的子查询，为其创建物理计划（虽然上层查询还在创建逻辑计划，但是这里的子查询是独立的，可以直接一步到位生成物理计划）
+  for(int i = 0; i < update_stmt->update_unites().size();i++) {
+    UpdateUnite& update_unite = update_stmt->update_unites()[i];
+    Expression* expr = update_unite.expression;
+    if(expr->type() == ExprType::SUBQUERY) {
+      auto sub_query_expr = static_cast<SubqueryExpr *>(expr);
+      rc = create_sub_query_physicalOperator_plan(sub_query_expr);  //走完创建逻辑计划和物理计划的全过程
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("update-select：为子查询生成物理计划失败");
+        return rc;
+      }
+    }
+  }
+
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, update_stmt->update_unites()));
  
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));

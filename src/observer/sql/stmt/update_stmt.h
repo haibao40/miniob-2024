@@ -31,24 +31,20 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, const char* attribute_name, const Value value, int value_amount, FilterStmt *filter_stmt);
+  UpdateStmt(Table *table, std::vector<UpdateUnite>& update_unites, FilterStmt *filter_stmt);
 
   StmtType type() const override { return StmtType::UPDATE; }
 
 public:
-  static RC create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt);
+  static RC create(Db *db, UpdateSqlNode &update_sql, Stmt *&stmt);
 
 public:
   Table *table() const { return table_; }
-  const Value value() const { return value_; }
-  int    value_amount() const { return value_amount_; }
-  const std::string &Attr_name() const {return attribute_name_;}
+  std::vector<UpdateUnite>& update_unites()  {return update_unites_;}
   FilterStmt *filter_stmt() const {return filter_stmt_;}
 
 private:
-  Table *table_        = nullptr;
-  std::string attribute_name_ = "";
-  const Value value_       = Value(0);
-  int    value_amount_ = 0;
-  FilterStmt *filter_stmt_ = nullptr;
+  Table *table_               = nullptr;
+  std::vector<UpdateUnite>    update_unites_;   /// 要更新的字段以及对应的值,对应的值可能是常量表达式，也可能是子查询
+  FilterStmt *filter_stmt_    = nullptr;
 };

@@ -220,35 +220,26 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   return rc;
 }
 
-RC Table::update_record(Record &record, vector<Value> &values, const char* field_name, const Value &value){
+RC Table::update_record(Record &old_record, vector<Value> &new_values){
   RC rc = RC::SUCCESS;
-  // LOG_DEBUG("type:%d, value:%s, field_name:%s", value.attr_type(), value.to_string().c_str(), field_name);
-
-
   Record new_record;
-  // int   record_size = table_meta_.record_size();
-  // char *record_data = (char *)malloc(record_size);
-  // const int normal_field_start_index = table_meta_.sys_field_num();
-  // const FieldMeta *field = table_meta_.field(normal_field_start_index);
-  // int offset = field->offset();
 
-  // memcpy(record_data, record.data() + offset, record_size);
-  // new_record.set_data_owner(record_data, record_size);
-
-  rc = make_record(values.size(), values.data(), new_record);
-
-  //make_record失败，可能是values的值不合法，比如某些字段不能为null
-  if(OB_FAIL(rc)) {
+  rc = make_record(new_values.size(), new_values.data(), new_record);
+  if(OB_FAIL(rc)) {  //make_record失败，可能是values的值不合法，比如某些字段不能为null
     return rc;
   }
-  rc = insert_record(new_record);
-  
+
+  rc = insert_record(new_record);       //插入新的记录
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to insert record. table name:%s", table_meta_.name());
     return rc;
   }
 
-  delete_record(record);
+  rc = delete_record(old_record);          //删除旧记录
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to delete old record when update record. table name:%s", table_meta_.name());
+    return rc;
+  }
   return rc;
 }
 

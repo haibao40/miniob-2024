@@ -26,18 +26,15 @@ See the Mulan PSL v2 for more details. */
 class UpdateLogicalOperator : public LogicalOperator
 {
 public:
-  UpdateLogicalOperator(Table *table, const char* field_name, Value value);
+  UpdateLogicalOperator(Table *table, std::vector<UpdateUnite> update_unites);
   virtual ~UpdateLogicalOperator() = default;
 
   LogicalOperatorType type() const override { return LogicalOperatorType::UPDATE; }
 
   Table                    *table() const { return table_; }
-  const std::string       &field_name() const { return field_name_;}
-  const Value &value() const { return value_; }
-  Value       &value() { return value_; }
+  std::vector<UpdateUnite> update_unites() const {return update_unites_;}
 
 private:
   Table             *table_ = nullptr;
-  std::string field_name_ = "";
-  Value value_;
+  std::vector<UpdateUnite>    update_unites_;   /// 要更新的字段以及对应的值,对应的值可能是常量表达式，也可能是子查询
 };

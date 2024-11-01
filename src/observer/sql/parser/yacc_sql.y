@@ -543,25 +543,25 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET update_unite update_unite_list where
+    UPDATE ID SET update_unite_list where
     {
       printf("解析update语句");
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.table_name = $2;
-      if($5 != nullptr){
-        $$->update.update_unites.swap(*$5);
+      $$->update.update_unites.swap(*$4);
+      if( $5 != nullptr){
+        $$->update.conditions.swap(*$5);
       }
-      $$->update.update_unites.push_back(*$4);
-      $$->update.conditions.swap(*$6);
     }
     ;
 update_unite_list:
-    /* empty */
+    update_unite
     {
-      printf("解析空的 unite list");
-      $$ = nullptr;
+      printf("解析update_unite_list为单个 unite list");
+      $$ = new std::vector<UpdateUnite>;
+      $$->push_back(*$1);
     }
-    | COMMA update_unite update_unite_list
+    | update_unite COMMA update_unite_list
     {
       printf("解析不是空的 unite list");
       if($3 != nullptr){
@@ -570,7 +570,7 @@ update_unite_list:
       else{
         $$ = new std::vector<UpdateUnite>;
       }
-      $$->push_back(*$2);
+      $$->push_back(*$1);
     }
     ;
 update_unite:

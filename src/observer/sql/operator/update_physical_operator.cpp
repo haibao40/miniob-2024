@@ -19,39 +19,45 @@ See the Mulan PSL v2 for more details. */
 
 using namespace std;
 
-UpdatePhysicalOperator::UpdatePhysicalOperator(Table *table, const char* field_name, Value &&value)
-    : table_(table), field_name_(field_name), value_(std::move(value))
+UpdatePhysicalOperator::UpdatePhysicalOperator(Table *table, std::vector<UpdateUnite> update_unites)
+    : table_(table), update_unites_(update_unites)
 {}
 
 RC UpdatePhysicalOperator::open(Trx *trx)
 {
+  RC rc = RC::SUCCESS;
+  trx_ = trx;
   if (children_.empty()) {
     return RC::SUCCESS;
   }
 
-  const FieldMeta *field = table_->table_meta().field(field_name_.c_str());
-  if(field == nullptr){
-    LOG_WARN("field_name is not exist");
-    return RC::NOTFOUND;
+  //TODO:这种先执行子查询，避免锁冲突的方式只适合非相关子查询，如果这里出现非相关子查询，需要用其它的手段来调整
+  //先执行子查询，因为上层的update语句要使用读写锁，当上层的物理算子打开后，这个读写锁就会加上去，
+  //此时，如果下层的子查询对应的表和上层查询是同一张表，就会导致下层的物理算子在打开时，加读锁失败，
+  //从而导致整个执行失败,由于update中这个查询一定是非相关子查询，所以，先让子查询执行一次，把结果缓存起来
+  //后面再去调用子查询的get_value方法，就会走缓存，而不会再去执行子查询
+  for(auto update_unite :update_unites_) {
+    if(update_unite.expression->type() == ExprType::SUBQUERY) {
+      Value new_value;
+      // 获取表达式的值
+      rc = update_unite.expression->get_value(RowTuple(), new_value); //这个tuple参数可以随便传，非相关子查询用不到
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("在执行update之前，获取表达式的值失败");
+        return rc;
+      }
+    }
   }
 
   std::unique_ptr<PhysicalOperator> &child = children_[0];
-  // std::unique_ptr<PhysicalOperator> &child1 = children_[1];
 
-  RC rc = child->open(trx);
+  rc = child->open(trx);   //打开下层算子
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to open child operator: %s", strrc(rc));
     return rc;
   }
-  // rc = child1->open(trx);
-  // if (rc != RC::SUCCESS) {
-  //   LOG_WARN("failed to open child operator: %s", strrc(rc));
-  //   return rc;
-  // }
 
-  trx_ = trx;
-
-  vector<vector<Value> > record_values;
+  vector<Record> old_records;
+  vector<vector<Value> > new_record_values;
   while (OB_SUCC(rc = child->next())) {
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
@@ -59,52 +65,24 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       return rc;
     }
 
-    Value valuetmp;
-    vector<Value> values;
+    vector<Value> new_values;
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    
-    //首先，先判断要更新的数据类型与原类型是否一致，空值则跳过判断
-    TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name_.c_str());
-    rc = row_tuple->find_cell(tuplecellspec, valuetmp);
-    // if(rc != RC::SUCCESS ){
-    //   LOG_WARN("not find");
-    //   return rc;
-    // }
-    if(valuetmp.attr_type() != value_.attr_type() && value_.attr_type() != AttrType::NULLS){
-      LOG_WARN("type is not right");
-      return RC::NOT_EXIST;
+    rc = get_new_record_values(row_tuple, new_values);
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("获取记录更新后的value列表失败");
+      return rc;
     }
-
-    //从1开始，是因为第0个位置是空值列表,这里把所有字段值保存起来
-    for(int i = 1; i < row_tuple->cell_num(); i++) {
-      Value value;
-      row_tuple->cell_at(i, value);
-      values.push_back(value);
-    }
-
-    //找到要更新的值的位置，在这里把它更新
-    int pos = 1;
-    for (int i = 0; i < row_tuple->cell_num(); ++i) {
-      TupleCellSpec spec ;
-      row_tuple->spec_at(i, spec);
-      if(spec.field_name() == field_name_) {
-        pos = i;
-        break;
-      }
-    }
-    values[pos - 1] = value_; //更新value
-
     Record   &record    = row_tuple->record();
-    records_.emplace_back(std::move(record));
-    record_values.push_back(values);
+    old_records.emplace_back(std::move(record));
+    new_record_values.push_back(new_values);
   }
 
-  child->close();
+  child->close();       //关闭下层算子
 
   // 先收集记录再更新
   // 记录的有效性由事务来保证，如果事务不保证更新的有效性，那说明此事务类型不支持并发控制，比如VacuousTrx
-  for (size_t i = 0; i < records_.size(); i++) {
-    rc = trx_->update_record(table_, records_[i], record_values[i],field_name_.c_str(), value_);
+  for (size_t i = 0; i < old_records.size(); i++) {
+    rc = trx_->update_record(table_, old_records[i], new_record_values[i]);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to delete record: %s", strrc(rc));
       return rc;
@@ -117,3 +95,54 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 RC UpdatePhysicalOperator::next() { return RC::RECORD_EOF; }
 
 RC UpdatePhysicalOperator::close() { return RC::SUCCESS; }
+
+RC UpdatePhysicalOperator::get_new_record_values(RowTuple* old_data_tuple, vector<Value>& values)
+{
+  RC rc = RC::SUCCESS;
+
+  //拿到这个记录之前的value值列表，存入values
+  for(int i = 1; i < old_data_tuple->cell_num(); i++) {  //从1开始，是因为第0个位置是空值列表,这里把所有字段值保存起来
+    Value value;
+    old_data_tuple->cell_at(i, value);
+    values.push_back(value);
+  }
+
+  //根据每一个update_unite,去更新values中对应位置的值
+  for(auto update_unite :update_unites_) {
+    Value valuetmp;
+    std::string field_name = update_unite.field_name;
+    Value new_value;
+    // 获取表达式的值
+    rc = update_unite.expression->get_value(*old_data_tuple, new_value);
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("更新过程中，获取表达式的值失败");
+      return rc;
+    }
+
+    //判断要更新的数据类型与原类型是否一致，不一致尝试进行类型转换，空值则跳过判断
+    TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name.c_str());
+    rc = old_data_tuple->find_cell(tuplecellspec, valuetmp);
+    if(valuetmp.attr_type() != new_value.attr_type() && new_value.attr_type() != AttrType::NULLS){
+      Value cast_to_result;
+      rc = Value::cast_to(new_value, valuetmp.attr_type(), cast_to_result);
+      if(rc != RC::SUCCESS) {
+        LOG_WARN("提供的新值和该字段原本的类型不匹配，且无法转换为该字段原本的类型");
+        return RC::NOT_EXIST;
+      }
+      new_value = cast_to_result;
+    }
+
+    //找到要更新的值的位置，在这里把它更新
+    int pos = 1;
+    for (int i = 0; i < old_data_tuple->cell_num(); ++i) {
+      TupleCellSpec spec ;
+      old_data_tuple->spec_at(i, spec);
+      if(spec.field_name() == field_name) {
+        pos = i;
+        break;
+      }
+    }
+    values[pos - 1] = new_value; //更新对应位置的值为new_value
+  }
+  return rc;
+}
