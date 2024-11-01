@@ -182,14 +182,15 @@ public:
    * @param is_null 用来存储判断的结果
    * @return 返回程序运行的状态，成功返回RC::SUCCESS，失败根据具体情况返回其他状态码
    */
-  static RC field_value_is_null(Table* table, char* record_data,  const char* field_name, bool& is_null)
+  static RC field_value_is_null(Table* table,char* record_data,  const char* field_name, bool& is_null)
   {
     RC rc = RC::SUCCESS;
     Record record;
     record.set_data(record_data, table->table_meta().record_size());
     RowTuple row_tuple;
-    row_tuple.set_record(&record);
     row_tuple.set_schema(table, table->table_meta().field_metas());
+    row_tuple.set_record(&record);
+    
     TupleCellSpec spec(table->table_meta().name(), field_name);
     Value value;
     rc = row_tuple.find_cell(spec, value);

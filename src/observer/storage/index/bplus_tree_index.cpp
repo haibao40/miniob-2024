@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/table/table.h"
 #include "storage/db/db.h"
+#include "sql/expr/tuple.h"
 
 BplusTreeIndex::~BplusTreeIndex() noexcept { close(); }
 
@@ -158,13 +159,24 @@ const char* BplusTreeIndex::create_new_record(const char *record){
   for(auto field_meta:*field_metas_){
     length_new_record = length_new_record + field_meta.len(); //报错 field_meta好像被释放掉了
   }
-  //string newRecordString ;
-  char* newRecord =  (char *)malloc(length_new_record * sizeof(char));
+  //string newRecordString ;  + 号后面预留给空值判断
+  char* newRecord =  (char *)malloc((length_new_record+field_metas_->size()) * sizeof(char));
   int current = 0;
   for(auto &field_meta :*field_metas_){
+    bool is_null = false;
+    RowTuple::field_value_is_null(table_,const_cast<char*>(record),field_meta.name(),is_null);
+    newRecord[current] = is_null;
+    current++;
+    if(is_null == false){
     for(int i=0;i<field_meta.len();i++){
       newRecord[current] = record[field_meta.offset()+i];
       current++;
+    }
+    }else{
+      for(int i=0;i<field_meta.len();i++){
+      newRecord[current] = '0';
+      current++;
+    }
     }
   }
   return newRecord;
