@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
 #include "sql/expr/expression_iterator.h"
+#include "sql/stmt/stmt.h"
+#include "common/global_variable.h"
 
 using namespace std;
 using namespace common;
@@ -73,6 +75,10 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
       return bind_value_expression(expr, bound_expressions);
     } break;
 
+    case ExprType::VALUE_LIST: {
+      return bind_value_expression(expr, bound_expressions);
+    } break;
+
     case ExprType::CAST: {
       return bind_cast_expression(expr, bound_expressions);
     } break;
@@ -101,6 +107,11 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
     case ExprType::VECTOR_FUNCTION: {
       // 目前,先将向量函数表达式的绑定，按照arithmetic处理，流程应该是完全一致的
       return bind_arithmetic_expression(expr, bound_expressions);
+    }
+
+    case ExprType::UNBOUND_SUBQUERY: {
+      // 对子查询表达式进行绑定，会让表达式中的sql_node走一次resolve流程
+      return bind_subquery_expression(expr, bound_expressions);
     }
 
     default: {
@@ -505,5 +516,23 @@ RC ExpressionBinder::bind_aggregate_expression(
   }
 
   bound_expressions.emplace_back(std::move(aggregate_expr));
+  return RC::SUCCESS;
+}
+
+
+RC ExpressionBinder::bind_subquery_expression(
+    unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &bound_expressions)
+{
+  auto unbound_sub_query_expr = static_cast<UnboundSubqueryExpr *>(expr.get());
+  ParsedSqlNode* parsed_sql_node = unbound_sub_query_expr->parsed_sql_node();  // 子查询对应的sql_node
+  Stmt          *stmt     = nullptr;
+  // 对子查询进行resolve TODO:如果是相关子查询，这里需要适当的调整
+  RC rc = Stmt::create_stmt(GlobalVariable::db, *parsed_sql_node, stmt);  // 对子查询进行resolve
+  SubqueryExpr *subquery_expr = new SubqueryExpr((SelectStmt*) stmt);
+  if (rc != RC::SUCCESS && rc != RC::UNIMPLEMENTED) {
+    LOG_WARN("failed to create stmt for sub query . rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+  bound_expressions.emplace_back(std::move(subquery_expr));
   return RC::SUCCESS;
 }

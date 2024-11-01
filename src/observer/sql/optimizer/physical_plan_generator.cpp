@@ -267,8 +267,6 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
   vector<unique_ptr<LogicalOperator>> &child_opers = update_oper.children();
 
   Table         *table           = update_oper.table();
-  Value          &value          = update_oper.value();
-  const char* field_name         = update_oper.field_name().c_str();
 
   unique_ptr<PhysicalOperator> child_physical_oper;
 
@@ -283,7 +281,7 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
     }
   }
 
-  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, field_name,::move(value)));
+  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(table, update_oper.update_unites()));
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));
   }

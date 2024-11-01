@@ -21,9 +21,11 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 #include "sql/expr/aggregator.h"
 #include "storage/common/chunk.h"
+#include "sql/stmt/select_stmt.h"
 
 class Tuple;
-
+class PhysicalOperator;
+class LogicalOperator;
 /**
  * @defgroup Expression
  * @brief 表达式
@@ -49,7 +51,9 @@ enum class ExprType
   ARITHMETIC,   ///< 算术运算
   VECTOR_FUNCTION, ///< 向量函数运算
   AGGREGATION,  ///< 聚合运算
-
+  UNBOUND_SUBQUERY,   ///< 未绑定的子查询
+  SUBQUERY ,      ///     < 绑定后的子查询表达式
+  VALUE_LIST      /// 常量列表
 };
 
 /**
@@ -308,9 +312,27 @@ public:
    * @param value the result of comparison
    */
   RC compare_value(const Value &left, const Value &right, bool &value) const;
+
+  /***
+   * @brief 专门处理比较表达式中包含列子查询的情况,即in、not in、exists、 not exists这几种情况
+   */
+  RC compare_with_column_subquery(const Tuple& tuple, Value& value) const;
+
+  /***
+   * @brief 专门处理比较表达式中包含常量列表的情况 ，比如 id in （1,2,3）
+   */
+  RC compare_with_value_list(const Tuple& tuple, Value& value) const;
+
   RC like_value(const Value &left, const Value &right, bool &value) const;
   template <typename T>
   RC compare_column(const Column &left, const Column &right, std::vector<uint8_t> &result) const;
+
+  /***
+   * @brief 实现in的运算
+   */
+  RC in_value_list(const Value& left, const vector<Value>& value_list, Value &value) const;
+
+
 
 private:
   /***
@@ -554,7 +576,7 @@ public:
 
 private:
   /// L2距离
-  static float l2_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector);
+  static float l2_distance(const std::vector<float> &left_vector, const std::vector<float> &right_vector);
   /// 余弦距离
   static float cosine_distance(const std::vector<float>& left_vector, const std::vector<float>& right_vector);
   /// 内积
@@ -572,4 +594,128 @@ private:
   std::unique_ptr<Expression> left_;
   ///向量函数的第二个向量参数
   std::unique_ptr<Expression> right_;
+};
+
+/***
+ * @brief 子查询表达式，还未和表以及表的字段进行绑定
+ */
+class UnboundSubqueryExpr : public Expression
+{
+public:
+  UnboundSubqueryExpr(ParsedSqlNode* parsed_sql_node)
+      : parsed_sql_node_(parsed_sql_node)
+  {}
+
+  virtual ~UnboundSubqueryExpr() = default;
+
+  ExprType type() const override { return ExprType::UNBOUND_SUBQUERY; }
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
+
+  ParsedSqlNode *parsed_sql_node() const { return parsed_sql_node_; }
+
+private:
+  //子查询对应的ParsedSqlNode
+  ParsedSqlNode* parsed_sql_node_;
+};
+
+
+/***
+ * @brief 子查询表达式
+ */
+class SubqueryExpr : public Expression
+{
+public:
+  SubqueryExpr() = default;
+  SubqueryExpr(SelectStmt* select_stmt)
+      : select_stmt_(select_stmt)
+  {}
+
+  virtual ~SubqueryExpr() = default;
+
+  ExprType type() const override { return ExprType::SUBQUERY; }
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+
+  /***
+   * @brief 对于标量子查询，通过这个方法拿到子查询表达式的值，目前，还只是支持非相关的标量子查询
+   *        说明：对于标量子查询，继续使用get_value这个方法，是为了减少代码的改动
+   */
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  RC get_value_list(const Tuple &tuple, vector<Value>& value_list) const;
+
+  SelectStmt  *select_stmt() const { return select_stmt_; }
+
+  void set_physical_operator(PhysicalOperator* physical_operator)
+  {
+    physical_operator_ = physical_operator;
+  }
+
+  PhysicalOperator* physical_operator() {return physical_operator_;}
+
+private:
+  ///子查询对应的ParsedSqlNode
+  SelectStmt* select_stmt_ = nullptr;
+  ///子查询对应的LogicalOperator;
+  LogicalOperator* logical_operator_ = nullptr;
+  ///子查询对应的PhysicalOperator
+  PhysicalOperator* physical_operator_ = nullptr;
+
+  ///标志位，表示子查询是否是关联子查询，默认为false,即不是关联子查询
+  mutable bool is_correlated = false;
+
+  ///标志位，表示非关联子查询是否已经执行，如果为true，获取表达式的值的时候，就不需要再次执行子查询了
+  mutable bool non_correlated_query_completed = false;
+
+  ///用来存储非相关子查询执行结束后的rc,方便在update_select中，走缓存时，也能够拿到之前执行子查询时对应的rc
+  ///否则，可能导致调用方拿不到真实的rc，做出错误的判断
+  mutable RC non_correlated_query_completed_rc = RC::SUCCESS;
+
+  ///记录非相关子查询返回的单个值,即非相关标量子查询
+  mutable Value signal_result_value_;
+
+  ///记录非相关子查询返回多个值，即非相关行子查询
+  mutable std::vector<Value> vec_result_values_;
+
+  RC get_signal_value_in_non_correlated_query(Value& value) const;
+  RC get_value_list_in_non_correlated_query(vector<Value>& value_list) const;
+};
+
+
+/**
+ * @brief 常量列表表达式, 即由常量组成的列表，例如：(1,2,3)，一般用在in 操作符中，例如：select * from t where a in (1,2,3)
+ * @ingroup Expression
+ */
+class ValueListExpr : public Expression
+{
+public:
+  ValueListExpr() = default;
+  explicit ValueListExpr(const vector<Value>& value_list) : value_list_(value_list) {}
+
+  virtual ~ValueListExpr() = default;
+
+  /// 这个函数暂时不支持，虽然返回的false，但是没啥实际意义
+  bool equal(const Expression &other) const override{ return false;}
+
+  ///注意：列表中可能有多个常量表达式Value,所以，对于这个表达式而言，不支持通过get_value来获取值
+  RC get_value(const Tuple &tuple, Value &value) const override {return RC::UNSUPPORTED;}
+  RC get_column(Chunk &chunk, Column &column) override{ return  RC::UNSUPPORTED;}
+  RC try_get_value(Value &value) const override{ return  RC::UNSUPPORTED;}
+
+  RC get_value_list(vector<Value>& value_list)
+  {
+    value_list.insert(value_list.begin(), value_list_.begin(), value_list_.end());
+    return RC::SUCCESS;
+  }
+
+  ExprType type() const override { return ExprType::VALUE_LIST; }
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+  /// 这个函数暂时不支持，虽然返回的0，但是没啥实际意义
+  int      value_length() const override { return 0; }
+
+
+private:
+  ///这里可以存放多个常量，组成一个列表
+  mutable vector<Value> value_list_;
 };

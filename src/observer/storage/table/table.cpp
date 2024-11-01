@@ -191,16 +191,16 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   }
 
   const int index_num = table_meta_.index_num();
-  
+
   for (int i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
     std::vector<const FieldMeta*>* field_metas_point = new std::vector<const FieldMeta*>();
     //const FieldMeta *field_meta = table_meta_.field(index_meta->field());
-    const std::vector<FieldMeta>* field_metas = index_meta->fields();   
+    const std::vector<FieldMeta>* field_metas = index_meta->fields();
     for(std::size_t i=0;i< field_metas->size();i++){
        field_metas_point->push_back(&((*field_metas)[i]));
     }
-  
+
 
     BplusTreeIndex *index      = new BplusTreeIndex();
     string          index_file = table_index_file(base_dir, name(), index_meta->name());
@@ -221,42 +221,32 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   return rc;
 }
 
-RC Table::update_record(Record &record, vector<Value> &values, const char* field_name, const Value &value){
+RC Table::update_record(Record &old_record, vector<Value> &new_values){
   RC rc = RC::SUCCESS;
-  // LOG_DEBUG("type:%d, value:%s, field_name:%s", value.attr_type(), value.to_string().c_str(), field_name);
-
-
   Record new_record;
-  // int   record_size = table_meta_.record_size();
-  // char *record_data = (char *)malloc(record_size);
-  // const int normal_field_start_index = table_meta_.sys_field_num();
-  // const FieldMeta *field = table_meta_.field(normal_field_start_index);
-  // int offset = field->offset();
 
-  // memcpy(record_data, record.data() + offset, record_size);
-  // new_record.set_data_owner(record_data, record_size);
-
-  rc = make_record(values.size(), values.data(), new_record);
-
-  //make_record失败，可能是values的值不合法，比如某些字段不能为null
-  if(OB_FAIL(rc)) {
+  rc = make_record(new_values.size(), new_values.data(), new_record);
+  if(OB_FAIL(rc)) {  //make_record失败，可能是values的值不合法，比如某些字段不能为null
     return rc;
   }
+
   //这里加一个步骤，查找唯一索引是否重复
   rc = unique_index_contor(new_record.data());
   if(rc !=RC::SUCCESS){
     return rc ;
   }
 
-
-  rc = insert_record(new_record);
-  
+  rc = insert_record(new_record);       //插入新的记录
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to insert record. table name:%s", table_meta_.name());
     return rc;
   }
 
-  delete_record(record);
+  rc = delete_record(old_record);          //删除旧记录
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to delete old record when update record. table name:%s", table_meta_.name());
+    return rc;
+  }
   return rc;
 }
 //这个方法就是给一个record 我们查看一下满不满足唯一索引
@@ -267,15 +257,15 @@ RC Table::unique_index_contor(const char* record){
     if(index_meta.is_unique() == true){
           std::list<RID> rids;
           //list<RID>* list = new vector<RID>();
-          BplusTreeIndex* b_index = dynamic_cast<BplusTreeIndex*>(index);  
-          if (b_index) {  
+          BplusTreeIndex* b_index = dynamic_cast<BplusTreeIndex*>(index);
+          if (b_index) {
             rc = b_index->get_entry(record,rids);
             if(rc!=RC::SUCCESS){
               return rc  ;
             }
-         } else {  
+         } else {
              continue; //当前索引不是b+树索引
-         }         
+         }
          if(rids.size()!=0){
                 return RC::UNIQUE_FAILD;
         }
@@ -534,7 +524,7 @@ RC Table::create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, co
   IndexMeta new_index_meta;
   RC rc = new_index_meta.init(index_name, *field_metas,is_unique);
   if(rc != RC::SUCCESS) {
-    LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s", 
+    LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s",
              name(), index_name);
     return rc;
   }
@@ -553,7 +543,7 @@ RC Table::create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, co
   RecordFileScanner scanner;
   rc = get_record_scanner(scanner, trx, ReadWriteMode::READ_ONLY);
   if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to create scanner while creating index. table=%s, index=%s, rc=%s", 
+    LOG_WARN("failed to create scanner while creating index. table=%s, index=%s, rc=%s",
              name(), index_name, strrc(rc));
     return rc;
   }
@@ -575,7 +565,7 @@ RC Table::create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, co
   }
   scanner.close_scan();
   LOG_INFO("inserted all records into new index. table=%s, index=%s", name(), index_name);
-  
+
    indexes_.push_back(index);
 
   /// 接下来将这个索引放到表的元数据中

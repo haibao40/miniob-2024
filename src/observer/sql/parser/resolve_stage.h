@@ -17,7 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 
 class SQLStageEvent;
-
+class ParsedSqlNode;
 /**
  * @brief 执行Resolve，将解析后的SQL语句，转换成各种Stmt(Statement), 同时会做错误检查
  * @ingroup SQLStage

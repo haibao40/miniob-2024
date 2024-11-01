@@ -152,6 +152,9 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         L2_DISTANCE      //向量函数L2_DISTANCE
         COSINE_DISTANCE  //向量函数COSINE_DISTANCE
         INNER_PRODUCT    //向量函数INNER_PRODUCT
+        IN_T
+        EXISTS_T
+
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -163,6 +166,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   RelAttrSqlNode *                           rel_attr;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  UpdateUnite *                              update_unite;
+  std::vector<UpdateUnite> *                 update_unite_list;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   std::vector<Value> *                       value_list;
@@ -195,6 +200,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
+%type <update_unite>        update_unite
+%type <update_unite_list>   update_unite_list
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
@@ -547,18 +554,43 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
+    UPDATE ID SET update_unite_list where
     {
+      printf("解析update语句");
       $$ = new ParsedSqlNode(SCF_UPDATE);
-      $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+      $$->update.table_name = $2;
+      $$->update.update_unites.swap(*$4);
+      if( $5 != nullptr){
+        $$->update.conditions.swap(*$5);
       }
-      free($2);
-      free($4);
+    }
+    ;
+update_unite_list:
+    update_unite
+    {
+      printf("解析update_unite_list为单个 unite list");
+      $$ = new std::vector<UpdateUnite>;
+      $$->push_back(*$1);
+    }
+    | update_unite COMMA update_unite_list
+    {
+      printf("解析不是空的 unite list");
+      if($3 != nullptr){
+        $$ = $3;
+      }
+      else{
+        $$ = new std::vector<UpdateUnite>;
+      }
+      $$->push_back(*$1);
+    }
+    ;
+update_unite:
+    ID EQ expression
+    {
+      printf("解析update unite");
+      $$ = new UpdateUnite();
+      $$->field_name = $1;
+      $$->expression = $3;
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
@@ -712,6 +744,17 @@ expression:
     }
     | COUNT LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
+    }
+    | LBRACE select_stmt RBRACE {
+      printf("解析子查询");
+      $$ = new UnboundSubqueryExpr($2);
+    }
+    | LBRACE value value_list RBRACE{
+      if($3 == nullptr){
+        $3 = new vector<Value>();
+      }
+      $3->push_back(*$2);
+      $$ = new ValueListExpr(*$3);
     }
     ;
 
@@ -998,6 +1041,10 @@ comp_op:
     | NOT LIKE { $$ = NOT_LIKE_TO; }
     | IS_ { $$ = IS ;}
     | IS_ NOT { $$ = IS_NOT ;}
+    | IN_T { $$ = IN ; }
+    | NOT IN_T { $$ = NOT_IN ; }
+    | EXISTS_T { $$ = EXISTS ; }
+    | NOT EXISTS_T { $$ = NOT_EXISTS ; }
     ;
 
 group_by:

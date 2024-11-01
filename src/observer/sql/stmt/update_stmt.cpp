@@ -18,55 +18,64 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include <vector>
+#include "common/global_variable.h"
 
-UpdateStmt::UpdateStmt(Table *table, const char* attribute_name ,const Value value, int value_amount, FilterStmt *filter_stmt)
-    : table_(table), attribute_name_(attribute_name), value_(value), value_amount_(value_amount), filter_stmt_(filter_stmt)
+UpdateStmt::UpdateStmt(Table *table, std::vector<UpdateUnite>& update_unites, FilterStmt *filter_stmt)
+    : table_(table), update_unites_(update_unites) , filter_stmt_(filter_stmt)
 {}
 
-//UpdateSqlNode 结构
-// std::string                   relation_name;   ///< Relation to update
-  // std::string                   attribute_name;  ///< 更新的字段，仅支持一个字段
-  // Value                         value;           ///< 更新的值，仅支持一个字段
-  // std::vector<ConditionSqlNode> conditions;
-RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
-{
-  // TODO
-  // stmt = nullptr;
-  // return RC::INTERNAL;
-  const char *table_name = update.relation_name.c_str();
-  const char *attribute_name = update.attribute_name.c_str();
-  
-  if (nullptr == db || nullptr == table_name || update.attribute_name.empty() || update.value.attr_type() == AttrType::UNDEFINED) {
-    LOG_WARN("invalid argument. db=%p, table_name=%p, attribute_name=%p, attrtype=%p",
-        db, table_name, update.attribute_name, update.value.attr_type());
-    return RC::INVALID_ARGUMENT;
-  }
 
-  LOG_DEBUG("table_name:%s, attr_name:%s, valuetype:%d, value:%s", table_name, update.attribute_name.c_str(), update.value.attr_type(), update.value.to_string().c_str());
-  // check whether the table exists
+RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
+{
+  //确定更新的表是否存在
+  const char* table_name = update.table_name.c_str();
   Table *table = db->find_table(table_name);
   if (nullptr == table) {
     LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  Value value = update.value;
-  int value_num = 1;//目前仅支持更改一个字段
+  //确定要更新的字段是否存在
+  for(int i = 0; i < update.update_unites.size();i++) {
+    const char* update_field_name = update.update_unites[i].field_name.c_str();
+    const FieldMeta* field_meta = table->table_meta().field(update_field_name);
+    if(field_meta == nullptr) {
+      LOG_INFO("要更新的字段不存在");
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    }
+  }
 
+  //表达式中可能存在子查询，为子查询创建stmt,实现将UnboundSubqueryExpr转换为BoundSubqueryExpr
+  for(int i = 0; i < update.update_unites.size();i++) {
+    UpdateUnite& update_unite = update.update_unites[i];
+    Expression* expr = update_unite.expression;
+    if(expr->type() == ExprType::UNBOUND_SUBQUERY) {
+      auto unbound_sub_query_expr = static_cast<UnboundSubqueryExpr *>(expr);
+      ParsedSqlNode* parsed_sql_node = unbound_sub_query_expr->parsed_sql_node();  // 子查询对应的sql_node
+      Stmt          *stmt     = nullptr;
+      // 对子查询进行resolve TODO:如果是相关子查询，这里需要适当的调整
+      RC rc = Stmt::create_stmt(GlobalVariable::db, *parsed_sql_node, stmt);  // 对子查询进行resolve
+      SubqueryExpr *subquery_expr = new SubqueryExpr((SelectStmt*) stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create stmt for sub query . rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
+      update_unite.expression = subquery_expr;  //将update_unite中的表达式替换为subquery_expr
+    }
+  }
+
+  //根据where过滤条件构造FilterStmt
   std::unordered_map<std::string, Table *> table_map;
-  table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
-
+  table_map.insert(std::pair<std::string, Table *>(update.table_name, table));
   FilterStmt *filter_stmt = nullptr;
-  RC          rc          = FilterStmt::create(
-      db, table, &table_map, update.conditions.data(), static_cast<int>(update.conditions.size()), filter_stmt);
+  RC rc = FilterStmt::create(db, table, &table_map, update.conditions.data(),
+                             static_cast<int>(update.conditions.size()), filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
     return rc;
   }
 
-  const Value value1 = update.value;
-  stmt = new UpdateStmt(table, attribute_name, value1, value_num, filter_stmt);
+  stmt = new UpdateStmt(table, update.update_unites , filter_stmt);
   
   return RC::SUCCESS;
-  // return RC::INTERNAL;
 }

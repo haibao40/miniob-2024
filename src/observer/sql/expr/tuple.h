@@ -206,15 +206,74 @@ public:
   }
 
   /***
-   * @brief 针对tuple当前管理的record对象，修改指定字段的值，
+   * @brief TODO:写完这个方法之后，我感觉这里的代码逻辑比较混乱，可能藏着BUG，暂时不要用这个方法
+   *        针对tuple当前管理的record对象，修改指定字段的值，
    *        注意，此时，该record.owner_属性应该为true，即表示当前record指向的内存，应该是由record对象自己管理的，而不是指向bufferPool中的Frame,
    *        bufferPool中的Frame内存需要使用其它的对象进行更新，以确保更新后的数据能够被写入磁盘
-   * @param index 要更新的是用户表中的第几个字段，从0开始
+   * @param spec 要更新字段的TupleCellSpec
    * @param new_value 要更新成的新数据
    */
-  // RC set_record_field(int index, const Value &new_value)
+  // RC set_record_field(TupleCellSpec &spec, const Value &new_value)
   // {
-  //   int real_index = table_->table_meta().sys_field_num() + index;
+  //   RC rc = RC::SUCCESS;
+  //   // 定位要更新的位置
+  //   if(0 != strcmp(spec.table_name(), table_->name())) {
+  //     LOG_ERROR("表名不匹配，设置字段值失败");
+  //     return RC::INVALID_ARGUMENT;
+  //   }
+  //
+  //   int field_index = -1;    //待更新字段的index
+  //   int field_offset = 0;    //待更新字段的offset
+  //   int copy_len = 0;        //更新时需要拷贝的长度
+  //   for(int i = 0 ; i< speces_.size(); i++) {
+  //     if(0 == strcmp(speces_[i]->field_name(), spec.field_name())) {
+  //       field_index = i;
+  //       if(speces_[i]->value_type() != new_value.attr_type() && new_value.attr_type() != AttrType::NULLS) {
+  //         LOG_ERROR("new_value的类型和field_meta中记录的类型不匹配，设置字段值失败");
+  //         return RC::INVALID_ARGUMENT;
+  //       }
+  //       else if(speces_[i]->field().meta()->not_null() == true && new_value.attr_type() == AttrType::NULLS ) {
+  //         LOG_ERROR("字段元数据中规定该字段不能为null，设置字段值失败");
+  //         return RC::INVALID_ARGUMENT;
+  //       }
+  //       else if(new_value.attr_type() == AttrType::CHARS) {  //因为字符串使用的是C风格的字符串，所以要额外多拷贝一个字节，那里存储的'\0'
+  //         copy_len = new_value.length() + 1;
+  //       }
+  //       else {
+  //         copy_len = new_value.length();
+  //       }
+  //       break;
+  //     }
+  //     else {
+  //       field_offset += speces_[i]->value_length(); //计算该字段的偏移量
+  //     }
+  //   }
+  //   if(field_index == -1) {
+  //     LOG_ERROR("要设置值的字段不存在，设置字段值失败");
+  //     return RC::INVALID_ARGUMENT;
+  //   }
+  //
+  //   if(new_value.attr_type() != AttrType::NULLS) {
+  //     memcpy(record_->data() + field_offset, new_value.data(), copy_len);
+  //   }
+  //   else {
+  //     // TODO:进行更新，为null的情况下，还需要更新空值列表
+  //     int null_value_list_field_offset = 0;
+  //     int null_value_list_index = -1;
+  //     auto null_value_list_field_meta = table_->table_meta().field(table_->table_meta().sys_field_num() - 1);
+  //     for(int i = 0 ; i< speces_.size(); i++) {
+  //       if(0 == strcmp(speces_[i]->field_name(), null_value_list_field_meta->name())) {
+  //         null_value_list_index = i;
+  //         break;
+  //       }
+  //       else {
+  //         null_value_list_field_offset += speces_[i]->value_length(); //计算空值列表对应的字段的偏移量
+  //       }
+  //     }
+  //     record().data()[null_value_list_field_offset + field_index - null_value_list_index] = '0'; //设置空值列表中对应的位置为'0'
+  //     memcpy(record_->data() + field_offset, new_value.data(), copy_len);
+  //   }
+  //
   //   return RC::UNIMPLEMENTED;
   // }
 

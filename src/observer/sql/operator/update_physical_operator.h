@@ -29,7 +29,7 @@ class UpdateStmt;
 class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
-  UpdatePhysicalOperator(Table *table, const char* field_name, Value &&value);
+  UpdatePhysicalOperator(Table *table, std::vector<UpdateUnite> update_unites);
 
   virtual ~UpdatePhysicalOperator() = default;
 
@@ -42,9 +42,14 @@ public:
   Tuple *current_tuple() override { return nullptr; }
 
 private:
+  /***
+   * @brief 根据update_unites_，实现对单条记录的更新
+   * @param old_data_tuple 要更新的旧数据对应的 tuple
+   */
+  RC get_new_record_values(RowTuple* old_data_tuple, vector<Value>& values);
+
+private:
   Table             *table_ = nullptr;
   Trx                *trx_   = nullptr;
-  std::string       field_name_ = "";
-  Value value_;
-  std::vector<Record> records_;
+  std::vector<UpdateUnite>    update_unites_;   /// 要更新的字段以及对应的值,对应的值可能是常量表达式，也可能是子查询
 };

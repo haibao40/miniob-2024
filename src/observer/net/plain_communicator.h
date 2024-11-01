@@ -18,7 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/vector.h"
 
 class SqlResult;
-
+class TupleSchema;
 /**
  * @brief 与客户端进行通讯
  * @ingroup Communicator
@@ -39,6 +39,12 @@ private:
   RC write_result_internal(SessionEvent *event, bool &need_disconnect);
   RC write_tuple_result(SqlResult *sql_result);
   RC write_chunk_result(SqlResult *sql_result);
+
+  /***
+   * @brief 发送查询结果的字段名，即查询结果的表头，原本这段代码不是一个单独的函数，但是我为了更改这部分的逻辑，将这个函数单独提取了出来
+   *
+   */
+  RC write_result_field_header(SqlResult *sql_result);
 
 protected:
   vector<char> send_message_delimiter_;  ///< 发送消息分隔符
