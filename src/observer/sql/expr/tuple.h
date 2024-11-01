@@ -174,6 +174,37 @@ public:
     speces_.clear();
   }
 
+  /***
+   * @brief 判断某一个表中存储的某一行数据中，某一个字段的值是否为null
+   * @param table 数据所属的表对象
+   * @param record_data 表中存储数据的行记录，需要完整的行记录
+   * @param field_name 要判断值是否为空的字段名
+   * @param is_null 用来存储判断的结果
+   * @return 返回程序运行的状态，成功返回RC::SUCCESS，失败根据具体情况返回其他状态码
+   */
+  static RC field_value_is_null(Table* table, char* record_data,  const char* field_name, bool& is_null)
+  {
+    RC rc = RC::SUCCESS;
+    Record record;
+    record.set_data(record_data, table->table_meta().record_size());
+    RowTuple row_tuple;
+    row_tuple.set_record(&record);
+    row_tuple.set_schema(table, table->table_meta().field_metas());
+    TupleCellSpec spec(table->table_meta().name(), field_name);
+    Value value;
+    rc = row_tuple.find_cell(spec, value);
+    if(rc != RC::SUCCESS) {
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    }
+    if(value.attr_type() == AttrType::NULLS) {
+      is_null = true;
+    }
+    else {
+      is_null = false;
+    }
+    return RC::SUCCESS;
+  }
+
   void set_record(Record *record)
   {
     this->record_ = record;
