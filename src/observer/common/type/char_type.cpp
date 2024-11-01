@@ -81,10 +81,8 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
             }  
             hasDecimal = true;  
         } else {  
-            // 如果遇到非数字字符且已经遇到了数字，则停止扫描  
-            if (hasDigits) {  
+            // 如果遇到非数字字符，则停止扫描  
                 break;  
-            }  
         }  
     }  
   
