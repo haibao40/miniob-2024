@@ -30,11 +30,11 @@ public:
   RC create(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
   RC open(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta);
   RC close();
-
+  RC get_entry(const char * record ,list<RID> &rids);
   RC insert_entry(const char *record, const RID *rid) override;
   RC delete_entry(const char *record, const RID *rid) override;
   RC open(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_metas);
-  const char* create_new_record(const char *record, const RID *rid);
+  const char* create_new_record(const char *record);
   RC destroy() override;
 
   /**

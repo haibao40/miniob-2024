@@ -60,7 +60,7 @@ public:
    * @param[out] rid    插入的记录的位置
    */
   virtual RC insert_entry(const char *record, const RID *rid) = 0;
-
+  //virtual RC get_entry(const char * record ,const list<RID> &rids) override
   /**
    * @brief 删除一条数据
    *

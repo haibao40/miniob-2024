@@ -115,7 +115,14 @@ RC BplusTreeIndex::open(Table *table, const char *file_name, const IndexMeta &in
     file_name, index_meta.name(), index_meta.field());
   return RC::SUCCESS;
 }
-
+RC BplusTreeIndex::get_entry(const char * record , list<RID> &rids){
+  const char* newRecord = create_new_record(record);
+  int length_new_record = 0;
+  for(auto field_meta:*field_metas_){
+    length_new_record = length_new_record + field_meta.len(); //报错 field_meta好像被释放掉了
+  }
+  return index_handler_.get_entry(newRecord,strlen(newRecord),rids);
+}
 RC BplusTreeIndex::close()
 {
   if (inited_) {
@@ -141,10 +148,10 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 { 
   //多字段索引的处理
   //const vector<const FieldMeta *>* field_metas_;
-  const char* newRecord = create_new_record(record, rid);
+  const char* newRecord = create_new_record(record);
   return index_handler_.insert_entry(newRecord, rid);
 }
-const char* BplusTreeIndex::create_new_record(const char *record, const RID *rid){
+const char* BplusTreeIndex::create_new_record(const char *record){
   //多字段索引的处理
   //const char* newRecord;
   int length_new_record = 0;
@@ -157,13 +164,14 @@ const char* BplusTreeIndex::create_new_record(const char *record, const RID *rid
   for(auto &field_meta :*field_metas_){
     for(int i=0;i<field_meta.len();i++){
       newRecord[current] = record[field_meta.offset()+i];
+      current++;
     }
   }
   return newRecord;
 }
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
 {
-  const char* newRecord = create_new_record(record, rid);
+  const char* newRecord = create_new_record(record);
   return index_handler_.delete_entry(newRecord, rid);
 }
 

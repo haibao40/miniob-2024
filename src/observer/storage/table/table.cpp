@@ -242,6 +242,13 @@ RC Table::update_record(Record &record, vector<Value> &values, const char* field
   if(OB_FAIL(rc)) {
     return rc;
   }
+  //这里加一个步骤，查找唯一索引是否重复
+  rc = unique_index_contor(new_record.data());
+  if(rc !=RC::SUCCESS){
+    return rc ;
+  }
+
+
   rc = insert_record(new_record);
   
   if (OB_FAIL(rc)) {
@@ -252,10 +259,39 @@ RC Table::update_record(Record &record, vector<Value> &values, const char* field
   delete_record(record);
   return rc;
 }
+//这个方法就是给一个record 我们查看一下满不满足唯一索引
+RC Table::unique_index_contor(const char* record){
+  RC rc = RC::SUCCESS;
+   for(auto index : indexes_){
+    IndexMeta index_meta  =index->index_meta();
+    if(index_meta.is_unique() == true){
+          std::list<RID> rids;
+          //list<RID>* list = new vector<RID>();
+          BplusTreeIndex* b_index = dynamic_cast<BplusTreeIndex*>(index);  
+          if (b_index) {  
+            rc = b_index->get_entry(record,rids);
+            if(rc!=RC::SUCCESS){
+              return rc  ;
+            }
+         } else {  
+             continue; //当前索引不是b+树索引
+         }         
+         if(rids.size()!=0){
+                return RC::UNIQUE_FAILD;
+        }
+    }
+   }
+    return RC::SUCCESS;
+}
 
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
+  //在这里加一个步骤判断唯一索引是否重复
+  rc = unique_index_contor(record.data());
+  if(rc !=RC::SUCCESS){
+    return rc ;
+  }
   rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
@@ -582,7 +618,6 @@ RC Table::create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, co
   LOG_INFO("Successfully added a new index (%s) on the table (%s)", index_name, name());
   return rc;
 }
-
 
 
 RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name)
