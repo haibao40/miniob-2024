@@ -127,7 +127,7 @@ RC UpdatePhysicalOperator::get_new_record_values(RowTuple* old_data_tuple, vecto
       LOG_ERROR("在原有数据中查找更新字段失败，要更新的字段不存在");
       return rc;
     }
-    if(valuetmp.attr_type() != new_value.attr_type() && new_value.attr_type() != AttrType::NULLS){
+    if(valuetmp.attr_type() != new_value.attr_type() &&valuetmp.attr_type()!= AttrType::NULLS &&new_value.attr_type() != AttrType::NULLS){
       Value cast_to_result;
       rc = Value::cast_to(new_value, valuetmp.attr_type(), cast_to_result);
       if(rc != RC::SUCCESS) {
