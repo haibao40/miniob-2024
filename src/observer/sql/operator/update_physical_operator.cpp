@@ -43,7 +43,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       rc = update_unite.expression->get_value(RowTuple(), new_value); //这个tuple参数可以随便传，非相关子查询用不到
       if(rc != RC::SUCCESS) {
         LOG_ERROR("在执行update之前，获取表达式的值失败");
-        return rc;
+        // 这里先不返回，因为根据正常的update-select逻辑，外层的过滤会先执行，有可能过滤后没有符合条件的数据，那么子查询即使有问题，也是不会被执行的，应该返回success
+        // return rc;
       }
     }
   }
@@ -122,6 +123,10 @@ RC UpdatePhysicalOperator::get_new_record_values(RowTuple* old_data_tuple, vecto
     //判断要更新的数据类型与原类型是否一致，不一致尝试进行类型转换，空值则跳过判断
     TupleCellSpec tuplecellspec = TupleCellSpec(table_->name(), field_name.c_str());
     rc = old_data_tuple->find_cell(tuplecellspec, valuetmp);
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("在原有数据中查找更新字段失败，要更新的字段不存在");
+      return rc;
+    }
     if(valuetmp.attr_type() != new_value.attr_type() && new_value.attr_type() != AttrType::NULLS){
       Value cast_to_result;
       rc = Value::cast_to(new_value, valuetmp.attr_type(), cast_to_result);

@@ -1160,6 +1160,7 @@ RC SubqueryExpr::get_value(const Tuple &tuple, Value &value) const
   RC rc = RC::SUCCESS;
   if(!is_correlated) { //非相关子查询获取结果
     rc = get_signal_value_in_non_correlated_query(value);
+    non_correlated_query_completed_rc = rc;   //记录rc,保证之后拿到的rc都和第一次相同
   }
   else {  //相关子查询获取结果，暂时未实现
     rc = RC::UNIMPLEMENTED;
@@ -1185,6 +1186,7 @@ RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
   RC rc = RC::SUCCESS;
   if(non_correlated_query_completed) { //非相关子查询已经执行过，直接返回结果
     value = signal_result_value_;
+    return non_correlated_query_completed_rc; //使用之前执行时记录下的rc，返回码也是缓存的一部分
   }
   else {
     //子查询还未执行，执行子查询

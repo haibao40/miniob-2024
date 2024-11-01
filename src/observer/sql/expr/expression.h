@@ -668,6 +668,10 @@ private:
   ///标志位，表示非关联子查询是否已经执行，如果为true，获取表达式的值的时候，就不需要再次执行子查询了
   mutable bool non_correlated_query_completed = false;
 
+  ///用来存储非相关子查询执行结束后的rc,方便在update_select中，走缓存时，也能够拿到之前执行子查询时对应的rc
+  ///否则，可能导致调用方拿不到真实的rc，做出错误的判断
+  mutable RC non_correlated_query_completed_rc = RC::SUCCESS;
+
   ///记录非相关子查询返回的单个值,即非相关标量子查询
   mutable Value signal_result_value_;
 
