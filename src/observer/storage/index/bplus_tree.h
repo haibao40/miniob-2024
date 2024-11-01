@@ -106,7 +106,7 @@ public:
     if (result != 0) {
       return result;
     }
-
+    
     const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length());
     const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length());
     return RID::compare(rid1, rid2);
