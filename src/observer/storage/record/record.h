@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <stddef.h>
+#include <vector>
 
 #include "common/log/log.h"
 #include "common/rc.h"
@@ -237,10 +238,12 @@ public:
     this->rid_.slot_num = slot_num;
   }
   RID       &rid() { return rid_; }
+  std::vector<RID> &rids() { return rids_; }
   const RID &rid() const { return rid_; }
 
 private:
   RID rid_;
+  std::vector<RID> rids_;
 
   char *data_  = nullptr;
   int   len_   = 0;      /// 如果不是record自己来管理内存，这个字段可能是无效的

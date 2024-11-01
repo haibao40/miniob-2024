@@ -11,6 +11,7 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Meiyi & Longda on 2021/4/13.
 //
+#include <vector>
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "storage/common/condition_filter.h"
@@ -603,6 +604,86 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
 
   // 找到空闲位置
   return record_page_handler->insert_record(data, rid);
+}
+
+RC RecordFileHandler::insert_record(const char *data, int record_size, int &offset,std::vector<RID>& rids)
+{
+  int r_size = table_meta_->record_size(); //每个记录的大小
+  RID rid;
+  RC ret = RC::SUCCESS;
+
+  unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
+  bool                          page_found       = false;
+  PageNum                       current_page_num = 0;
+
+  // 当前要访问free_pages对象，所以需要加锁。在非并发编译模式下，不需要考虑这个锁
+  lock_.lock();
+
+  // 找到没有填满的页面
+  while (!free_pages_.empty()) {
+    current_page_num = *free_pages_.begin();
+
+    ret = record_page_handler->init(*disk_buffer_pool_, *log_handler_, current_page_num, ReadWriteMode::READ_WRITE);
+    if (OB_FAIL(ret)) {
+      lock_.unlock();
+      LOG_WARN("failed to init record page handler. page num=%d, rc=%d:%s", current_page_num, ret, strrc(ret));
+      return ret;
+    }
+
+    if (!record_page_handler->is_full()) {
+      page_found = true;
+      break;
+    }
+    record_page_handler->cleanup();
+    free_pages_.erase(free_pages_.begin());
+  }
+  lock_.unlock();  // 如果找到了一个有效的页面，那么此时已经拿到了页面的写锁
+
+  // 找不到就分配一个新的页面
+  if (!page_found) {
+    Frame *frame = nullptr;
+    if ((ret = disk_buffer_pool_->allocate_page(&frame)) != RC::SUCCESS) {
+      LOG_ERROR("Failed to allocate page while inserting record. ret:%d", ret);
+      return ret;
+    }
+
+    current_page_num = frame->page_num();
+
+    ret = record_page_handler->init_empty_page(
+        *disk_buffer_pool_, *log_handler_, current_page_num, record_size, table_meta_);
+    if (OB_FAIL(ret)) {
+      frame->unpin();
+      LOG_ERROR("Failed to init empty page. ret:%d", ret);
+      // this is for allocate_page
+      return ret;
+    }
+
+    // frame 在allocate_page的时候，是有一个pin的，在init_empty_page时又会增加一个，所以这里手动释放一个
+    frame->unpin();
+
+    // 这里的加锁顺序看起来与上面是相反的，但是不会出现死锁
+    // 上面的逻辑是先加lock锁，然后加页面写锁，这里是先加上
+    // 了页面写锁，然后加lock的锁，但是不会引起死锁。
+    // 为什么？
+    lock_.lock();
+    free_pages_.insert(current_page_num);
+    lock_.unlock();
+  }
+
+  while((ret = record_page_handler->insert_record(data+offset, &rid)) == RC::SUCCESS){
+    offset += r_size; //offset代表当前插入多少数据了，以位为单位
+    if(offset >= record_size)
+      break;
+
+    rids.push_back(rid);
+  }
+
+  if(ret == RC::RECORD_NOMEM){
+    return insert_record(data+offset, record_size, offset, rids);
+  }
+  // 找到空闲位置
+  // return record_page_handler->insert_record(data, &rid);
+  return ret;
 }
 
 RC RecordFileHandler::recover_insert_record(const char *data, int record_size, const RID &rid)

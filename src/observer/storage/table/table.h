@@ -91,6 +91,8 @@ public:
   RC delete_record(const RID &rid);
   RC get_record(const RID &rid, Record &record);
 
+  RC insert_record(Record &record, int record_size);
+
   RC recover_insert_record(Record &record);
 
   // TODO refactor
@@ -125,6 +127,8 @@ private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
   RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field);
+
+  RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field, int offset);
   /***
    * @brief 获取空值列表
    * @param value_num 数据的个数

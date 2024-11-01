@@ -277,6 +277,38 @@ RC Table::insert_record(Record &record)
   return rc;
 }
 
+RC Table::insert_record(Record &record, int record_size)
+{
+  RC rc = RC::SUCCESS;
+  int offest = 0;
+  // rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  if(record_size <= table_meta_.record_size()){
+    rc    = record_handler_->insert_record(record.data(), record_size, &record.rid());
+  }
+  else{
+    rc    = record_handler_->insert_record(record.data(), record_size, offest, record.rids());
+  }
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
+    return rc;
+  }
+
+  rc = insert_entry_of_indexes(record.data(), record.rid());
+  if (rc != RC::SUCCESS) {  // 可能出现了键值重复
+    RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
+    if (rc2 != RC::SUCCESS) {
+      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc2, strrc(rc2));
+    }
+    rc2 = record_handler_->delete_record(&record.rid());
+    if (rc2 != RC::SUCCESS) {
+      LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc2, strrc(rc2));
+    }
+  }
+  return rc;
+}
+
 RC Table::visit_record(const RID &rid, function<bool(Record &)> visitor)
 {
   return record_handler_->visit_record(rid, visitor);
@@ -348,10 +380,13 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 复制所有字段的值
-  int   record_size = table_meta_.record_size();
+  // int   record_size = table_meta_.record_size();
+  int record_size = 0;
+  for(int i = 0; i < value_num + 1; i++) record_size += values[i].length();
   char *record_data = (char *)malloc(record_size);
   memset(record_data, 0, record_size);
 
+  int offset = 0;
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
@@ -363,10 +398,13 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
             table_meta_.name(), field->name(), value.to_string().c_str());
         break;
       }
-      rc = set_value_to_record(record_data, real_value, field);
+      // rc = set_value_to_record(record_data, real_value, field);
+      rc = set_value_to_record(record_data, real_value, field, offset);
     } else {
-      rc = set_value_to_record(record_data, value, field);
+      // rc = set_value_to_record(record_data, value, field);
+      rc = set_value_to_record(record_data, value, field, offset);
     }
+    offset += value.length();
   }
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to make record. table name:%s", table_meta_.name());
@@ -427,9 +465,39 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
+  }else if(field->type() == AttrType::TEXT){
+    if(copy_len < data_len){
+      copy_len = data_len;
+    }
   }
  
   memcpy(record_data + field->offset(), value.data(), copy_len);
+  
+  return RC::SUCCESS;
+}
+
+RC Table::set_value_to_record(char *record_data, const Value &value, const FieldMeta *field, int offset){
+  if(field == nullptr){
+    LOG_WARN("filed is empty");
+    return RC::EMPTY;
+  }
+  if(field->len() < value.length() && field->type() != AttrType::TEXT) {
+    LOG_WARN("传入value的存储长度，超过了字段元数据FieldMeta中定义的长度");
+    return RC::INVALID_ARGUMENT;
+  }
+  size_t       copy_len = field->len();
+  const size_t data_len = value.length();
+  if (field->type() == AttrType::CHARS) {
+    if (copy_len > data_len) {
+      copy_len = data_len + 1;
+    }
+  }else if(field->type() == AttrType::TEXT){
+    if(copy_len < data_len){
+      copy_len = data_len;
+    }
+  }
+ 
+  memcpy(record_data + offset, value.data(), copy_len);
   
   return RC::SUCCESS;
 }
