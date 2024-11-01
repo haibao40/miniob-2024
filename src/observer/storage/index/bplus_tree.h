@@ -66,14 +66,21 @@ public:
 
   int operator()(const char *v1, const char *v2) const
   {
-    // TODO: optimized the comparison
-    Value left;
-    left.set_type(attr_type_);
-    left.set_data(v1, attr_length_);
-    Value right;
-    right.set_type(attr_type_);
-    right.set_data(v2, attr_length_);
-    return DataType::type_instance(attr_type_)->compare(left, right);
+    int result = 0 ;
+    //修改比较逻辑,直接比较内存块的大小
+    for(int i=0 ;i<attr_length_;i++){
+         result = v1[i] - v2[i];
+         if(result != 0){return result ;}
+    }
+    return result; 
+    // // TODO: optimized the comparison
+    // Value left;
+    // left.set_type(attr_type_);
+    // left.set_data(v1, attr_length_);
+    // Value right;
+    // right.set_type(attr_type_);
+    // right.set_data(v2, attr_length_);
+    // return DataType::type_instance(attr_type_)->compare(left, right);
   }
 
 private:
