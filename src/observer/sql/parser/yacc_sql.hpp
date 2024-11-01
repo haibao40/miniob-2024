@@ -124,11 +124,13 @@ extern int yydebug;
     L2_DISTANCE = 325,             /* L2_DISTANCE  */
     COSINE_DISTANCE = 326,         /* COSINE_DISTANCE  */
     INNER_PRODUCT = 327,           /* INNER_PRODUCT  */
-    NUMBER = 328,                  /* NUMBER  */
-    FLOAT = 329,                   /* FLOAT  */
-    ID = 330,                      /* ID  */
-    SSS = 331,                     /* SSS  */
-    UMINUS = 332                   /* UMINUS  */
+    IN_T = 328,                    /* IN_T  */
+    EXISTS_T = 329,                /* EXISTS_T  */
+    NUMBER = 330,                  /* NUMBER  */
+    FLOAT = 331,                   /* FLOAT  */
+    ID = 332,                      /* ID  */
+    SSS = 333,                     /* SSS  */
+    UMINUS = 334                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -137,7 +139,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 158 "yacc_sql.y"
+#line 161 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -146,6 +148,8 @@ union YYSTYPE
   RelAttrSqlNode *                           rel_attr;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  UpdateUnite *                              update_unite;
+  std::vector<UpdateUnite> *                 update_unite_list;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   std::vector<Value> *                       value_list;
@@ -159,7 +163,7 @@ union YYSTYPE
   float                                      floats;
   bool                                       bools;
 
-#line 163 "yacc_sql.hpp"
+#line 167 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
