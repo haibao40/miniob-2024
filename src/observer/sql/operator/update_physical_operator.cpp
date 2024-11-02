@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/update_stmt.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
+#include "event/sql_debug.h"
 
 using namespace std;
 
@@ -42,6 +43,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       // 获取表达式的值
       rc = update_unite.expression->get_value(RowTuple(), new_value); //这个tuple参数可以随便传，非相关子查询用不到
       if(rc != RC::SUCCESS) {
+        sql_debug("在执行update之前，获取表达式的值失败,rc = %s", strrc(rc));
         LOG_ERROR("在执行update之前，获取表达式的值失败");
         // 这里先不返回，因为根据正常的update-select逻辑，外层的过滤会先执行，有可能过滤后没有符合条件的数据，那么子查询即使有问题，也是不会被执行的，应该返回success
         // return rc;
@@ -85,7 +87,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
   for (size_t i = 0; i < old_records.size(); i++) {
     rc = trx_->update_record(table_, old_records[i], new_record_values[i]);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to delete record: %s", strrc(rc));
+      sql_debug("执行update_record失败,rc = %s", strrc(rc));
+      LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
   }
@@ -116,6 +119,7 @@ RC UpdatePhysicalOperator::get_new_record_values(RowTuple* old_data_tuple, vecto
     // 获取表达式的值
     rc = update_unite.expression->get_value(*old_data_tuple, new_value);
     if(rc != RC::SUCCESS) {
+      sql_debug("在执行update更新的过程中，获取表达式的值失败,rc = %s", strrc(rc));
       LOG_ERROR("更新过程中，获取表达式的值失败");
       return rc;
     }
