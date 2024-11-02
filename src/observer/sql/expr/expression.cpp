@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include <common/type/null_type.h>
 #include "common/global_variable.h"
 #include "sql/operator/physical_operator.h"
+#include "event/sql_debug.h"
 
 using namespace std;
 
@@ -1222,6 +1223,7 @@ RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
     }
     if(value_list.size() != 1) {
       LOG_ERROR("在执行标量子查询的过程中，子查询实际返回了%d个值，SQL不合法", (int)value_list.size());
+      sql_debug("在执行标量子查询的过程中，子查询实际返回了%d个值，SQL不合法", (int)value_list.size());
       rc = physical_operator_->close();
       if(rc != RC::SUCCESS) {
         LOG_ERROR("关闭子查询物理算子失败");
