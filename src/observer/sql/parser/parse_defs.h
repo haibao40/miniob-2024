@@ -38,6 +38,7 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
+  std::string alias;           ///< alias                       别名 
 };
 
 /**
@@ -103,13 +104,14 @@ struct ConditionSqlNode
 struct SelectSqlNode
 {
   std::vector<std::unique_ptr<Expression>> expressions;  ///< 查询的表达式
-  std::vector<std::string>                 relations;    ///< 查询的表
+  // std::vector<std::string>                 relations;    ///< 查询的表
+  std::map<std::string, std::string>                 relations;    ///< 查询的表
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
   std::vector<ConditionSqlNode>            having;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>>  order_by;    /// order by 需要的东西
-  std::map<std::string,std::string>  alias_name; //别名到真实名字对应的map
-  std::map<std::string,std::string>  name_alias ;//真实名字到别名对应的map
+  // std::map<std::string,std::string>  alias_name; //别名到真实名字对应的map
+  // std::map<std::string,std::string>  name_alias ;//真实名字到别名对应的map
   std::vector<std::vector<ConditionSqlNode>*>  join_conditions; //join的条件 join后面都跟着很多条件
 };
 
@@ -175,6 +177,12 @@ struct AttrInfoSqlNode
   size_t      length;  ///< Length of attribute
   bool        not_null;///< not null限制，等于true时，表示该字段不允许设置null值
   bool        visible = true; ///< 是否可见，等于true时，表示该字段是可见的，否则不可见,是系统隐藏字段
+
+  //设置==，对比两个attrinfosqlnode是否相等
+  bool operator==(const AttrInfoSqlNode& other) const{
+    return this->type == other.type && this->length == other.length
+           && this->not_null == other.not_null && this->visible == other.visible;
+  }
 
   /***
    * @brief 设置char 类型的存储长度
@@ -300,6 +308,19 @@ struct ErrorSqlNode
 };
 
 /**
+ * @brief 查询时建表
+ * @ingroup SQLParser
+ * @note 需要表名，还有selectsqlnode
+ */
+struct CreateTableSelectSqlNode
+{
+  std::string table_name;
+  std::vector<AttrInfoSqlNode> attr_infos;      ///< attributes
+  std::string                  storage_format;  ///< storage format
+  ParsedSqlNode* sql_node;
+};
+
+/**
  * @brief 表示一个SQL语句的类型
  * @ingroup SQLParser
  */
@@ -327,6 +348,7 @@ enum SqlCommandFlag
   SCF_EXIT,
   SCF_EXPLAIN,
   SCF_SET_VARIABLE,  ///< 设置变量
+  SCF_CREATE_TABLE_SELECT
 };
 /**
  * @brief 表示一个SQL语句
@@ -335,21 +357,22 @@ enum SqlCommandFlag
 class ParsedSqlNode
 {
 public:
-  enum SqlCommandFlag flag;
-  ErrorSqlNode        error;
-  CalcSqlNode         calc;
-  SelectSqlNode       selection;
-  InsertSqlNode       insertion;
-  DeleteSqlNode       deletion;
-  UpdateSqlNode       update;
-  CreateTableSqlNode  create_table;
-  DropTableSqlNode    drop_table;
-  CreateIndexSqlNode  create_index;
-  DropIndexSqlNode    drop_index;
-  DescTableSqlNode    desc_table;
-  LoadDataSqlNode     load_data;
-  ExplainSqlNode      explain;
-  SetVariableSqlNode  set_variable;
+  enum SqlCommandFlag      flag;
+  ErrorSqlNode             error;
+  CalcSqlNode              calc;
+  SelectSqlNode            selection;
+  InsertSqlNode            insertion;
+  DeleteSqlNode            deletion;
+  UpdateSqlNode            update;
+  CreateTableSqlNode       create_table;
+  DropTableSqlNode         drop_table;
+  CreateIndexSqlNode       create_index;
+  DropIndexSqlNode         drop_index;
+  DescTableSqlNode         desc_table;
+  LoadDataSqlNode          load_data;
+  ExplainSqlNode           explain;
+  SetVariableSqlNode       set_variable;
+  CreateTableSelectSqlNode create_table_select;
 
 public:
   ParsedSqlNode();

@@ -86,7 +86,6 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         BY
         CREATE
         DROP
-        GROUP
         ORDER
         TABLE
         TABLES
@@ -173,8 +172,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
-  std::vector<std::string> *                 join_list;
+  std::map<std::string, std::string> *       relation_list;
+  std::map<std::string, std::string> *       join_list;
   std::vector<float> *                       float_list;
   char *                                     string;
   int                                        number;
@@ -222,6 +221,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_table_select_stmt
 %type <sql_node>            drop_table_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
@@ -273,6 +273,7 @@ command_wrapper:
   | set_variable_stmt
   | help_stmt
   | exit_stmt
+  | create_table_select_stmt
     ;
 
 exit_stmt:      
@@ -593,6 +594,35 @@ update_unite:
       $$->expression = $3;
     }
     ;
+create_table_select_stmt:      /*  create_table_select 语句的语法解析树*/
+    CREATE TABLE ID AS select_stmt{
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      $$->create_table_select.table_name    = $3;
+      $$->create_table_select.sql_node      = $5; 
+      free($3);
+    }
+    | CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format select_stmt
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      $$->create_table_select.table_name    = $3;
+      free($3);
+
+      std::vector<AttrInfoSqlNode> *src_attrs = $6;
+
+      if (src_attrs != nullptr) {
+        $$->create_table_select.attr_infos.swap(*src_attrs);
+        delete src_attrs;
+      }
+      $$->create_table_select.attr_infos.emplace_back(*$5);
+      std::reverse($$->create_table_select.attr_infos.begin(), $$->create_table_select.attr_infos.end());
+      delete $5;
+      if ($8 != nullptr) {
+        $$->create_table_select.storage_format = $8;
+        free($8);
+      }
+      $$->create_table_select.sql_node      = $9; 
+    }
+    ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM rel_list where group_by having order_by
     {
@@ -681,7 +711,7 @@ expression:
     }
     | rel_attr {
       RelAttrSqlNode *node = $1;
-      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name);
+      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name, node->alias);
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
     }
@@ -771,6 +801,22 @@ rel_attr:
       free($1);
       free($3);
     }
+    | ID AS ID{
+      $$ = new RelAttrSqlNode;
+      $$->attribute_name = $1;
+      $$->alias          = $3;
+      free($1);
+      free($3);
+    }
+    | ID DOT ID AS ID{
+      $$ = new RelAttrSqlNode;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias          = $5;
+      free($1);
+      free($3);
+      free($5);
+    }
     ;
 
 relation:
@@ -780,19 +826,51 @@ relation:
     ;
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
+      $$ = new std::map<std::string, std::string>();
+      $$->insert({$1, $1});
       free($1);
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::map<std::string, std::string>();
       }
 
-      $$->insert($$->begin(), $1);
+      $$->insert($$->begin(), {$1, $1});
       free($1);
+    }
+    | relation AS ID{
+      $$ = new std::map<std::string, std::string>();
+      $$->insert({$1, $3});
+      free($1);
+      free($3);
+    }
+    | relation ID{
+      $$ = new std::map<std::string, std::string>();
+      $$->insert({$1, $2});
+      free($1);
+      free($2);
+    }
+    | relation AS ID COMMA rel_list{
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::map<std::string, std::string>();
+      }
+      $$->insert($$->begin(), {$1, $3});
+      free($1);
+      free($3);
+    }
+    | relation ID COMMA rel_list{
+      if ($4!= nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::map<std::string, std::string>();
+      }
+      $$->insert($$->begin(), {$1, $2});
+      free($1);
+      free($2);
     }
     | join_in{
       if($$ == nullptr){
@@ -806,16 +884,27 @@ rel_list:
 
 
 join_in_right_list:
-    INNER JOIN relation ON condition_list{
-    $$ = new std::vector<std::string>();
+  INNER JOIN relation ON condition_list {
+    $$ = new std::map<std::string, std::string>();
     join_conditions.push_back($5);
-    $$->push_back($3);
+    $$->insert({$3, $3});
   }
-  | INNER JOIN  relation{
-    $$ = new std::vector<std::string>();
+  | INNER JOIN relation AS ID ON condition_list {
+    $$ = new std::map<std::string, std::string>();
+    join_conditions.push_back($7);
+    $$->insert({$3, $5});
+  }
+  | INNER JOIN  relation {
+    $$ = new std::map<std::string, std::string>();
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
     join_conditions.push_back(temp);
-    $$->push_back($3);
+    $$->insert({$3,$3});
+  }
+  | INNER JOIN  relation AS ID {
+    $$ = new std::map<std::string, std::string>();
+    std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
+    join_conditions.push_back(temp);
+    $$->insert({$3,$5});
   }
   | INNER JOIN  relation join_in_right_list{
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
@@ -823,21 +912,43 @@ join_in_right_list:
     if ($4 != nullptr) {
         $$ = $4;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::map<std::string, std::string>();
       }
-      $$->insert($$->begin(), $3);
+      $$->insert($$->begin(), {$3, $3});
       free($3);
-
+  }
+  | INNER JOIN  relation AS ID join_in_right_list{
+    std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
+    join_conditions.push_back(temp);
+    if ($6 != nullptr) {
+        $$ = $6;
+      } else {
+        $$ = new std::map<std::string, std::string>();
+      }
+      $$->insert($$->begin(), {$3, $5});
+      free($3);
+      free($5);
   }
   | INNER JOIN relation ON condition_list join_in_right_list{
     join_conditions.push_back($5);
     if ($6 != nullptr) {
         $$ = $6;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::map<std::string, std::string>();
       }
-      $$->insert($$->begin(), $3);
+      $$->insert($$->begin(), {$3, $3});
       free($3);
+  }
+  | INNER JOIN relation AS ID ON condition_list join_in_right_list{
+    join_conditions.push_back($7);
+    if ($8 != nullptr) {
+        $$ = $8;
+      } else {
+        $$ = new std::map<std::string, std::string>();
+      }
+      $$->insert($$->begin(), {$3, $5});
+      free($3);
+      free($5);
   }
   ;
 
@@ -846,10 +957,20 @@ join_in:
     if ($2 != nullptr) {
       $$ = $2;
     } else{
-      $$ = new std::vector<std::string>;
+      $$ = new std::map<std::string, std::string>();
     }
-    $$->insert($$->begin(), $1);
+    $$->insert($$->begin(), {$1, $1});
     free($1);
+  }
+  | relation AS ID join_in_right_list{
+    if ($4 != nullptr) {
+      $$ = $4;
+    } else{
+      $$ = new std::map<std::string, std::string>();
+    }
+    $$->insert($$->begin(), {$1, $3});
+    free($1);
+    free($3);
   }
   ;
 

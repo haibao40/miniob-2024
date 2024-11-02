@@ -166,6 +166,9 @@ public:
   UnboundFieldExpr(const std::string &table_name, const std::string &field_name)
       : table_name_(table_name), field_name_(field_name)
   {}
+  UnboundFieldExpr(const std::string &table_name, const std::string &field_name, const std::string &field_alias)
+      : table_name_(table_name), field_name_(field_name), field_alias_(field_alias)
+  {}
 
   virtual ~UnboundFieldExpr() = default;
 
@@ -176,10 +179,19 @@ public:
 
   const char *table_name() const { return table_name_.c_str(); }
   const char *field_name() const { return field_name_.c_str(); }
+  const char *table_alias() const { return table_alias_.c_str(); }
+  const char *field_alias() const { return field_alias_.c_str(); }
+  void set_table_name(const string& table_name) { 
+    table_alias_ = table_name_; 
+    table_name_  = table_name;
+  }
+
 
 private:
   std::string table_name_;
+  std::string table_alias_;
   std::string field_name_;
+  std::string field_alias_;
 };
 
 /**

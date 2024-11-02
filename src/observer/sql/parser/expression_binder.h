@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <vector>
+#include <map>
 
 #include "sql/expr/expression.h"
 
@@ -25,6 +26,10 @@ public:
   virtual ~BinderContext() = default;
 
   void add_table(Table *table) { query_tables_.push_back(table); }
+  void add_table_alias(const char* table_name, const char* table_alias){
+    table_name2table_alias_.insert({table_name, table_alias}); 
+  }
+  
 
   Table *find_table(const char *table_name) const;
 
@@ -32,6 +37,7 @@ public:
 
 private:
   std::vector<Table *> query_tables_;
+  std::map<std::string, std::string> table_name2table_alias_;
 };
 
 /**

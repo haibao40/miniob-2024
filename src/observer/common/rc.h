@@ -82,6 +82,7 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(ILLEGAL_SUB_QUERY)           \
   DEFINE_RC(ILLEGAL_SUB_QUERY_zero_record) \
   DEFINE_RC(ILLEGAL_SUB_QUERY_multiple_record) \
+  DEFINE_RC(WRONG_ATTR)                 \
   DEFINE_RC(UNSUPPORTED)
 
 enum class RC

@@ -30,12 +30,14 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
 #include "sql/operator/order_by_logical_operator.h"
+#include "sql/operator/insert_with_tuples_logical_operator.h"
 
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/filter_stmt.h"
 #include "sql/stmt/insert_stmt.h"
+#include "sql/stmt/create_table_select_stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
 #include "sql/stmt/stmt.h"
@@ -90,6 +92,13 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
 
       rc = create_plan(explain_stmt, logical_operator);
     } break;
+
+    case StmtType::CREATE_TABLE_SELECT: {
+      CreateTableSelectStmt *create_table_select_stmt = static_cast<CreateTableSelectStmt *>(stmt);
+
+      rc = create_plan(create_table_select_stmt, logical_operator);
+    } break;
+
     default: {
       rc = RC::UNIMPLEMENTED;
     }
@@ -536,6 +545,27 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
                                                            std::move(aggregate_expressions));
   logical_operator = std::move(group_by_oper);
   return RC::SUCCESS;
+}
+
+RC LogicalPlanGenerator::create_plan(CreateTableSelectStmt *create_table_select_stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+  Table                      *table       = create_table_select_stmt->table();
+  SelectStmt                 *select_stmt = create_table_select_stmt->select_stmt();
+
+
+  unique_ptr<LogicalOperator> project_oper;
+
+  RC rc = create_plan(select_stmt, project_oper);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  unique_ptr<LogicalOperator> create_table_select_oper(new InsertTuplesLogicalOperator(table));
+
+  create_table_select_oper->add_child(std::move(project_oper));
+
+  logical_operator = std::move(create_table_select_oper);
+  return rc;
 }
 
 // RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<LogicalOperator> &logical_operator)

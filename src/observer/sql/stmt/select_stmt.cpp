@@ -44,7 +44,9 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
+    auto it = select_sql.relations.begin(); // 获取指向第一个元素的迭代器
+    std::advance(it, i);
+    const char *table_name = it->first.c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -56,9 +58,11 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
+    binder_context.add_table_alias(table_name, it->second.c_str());
     binder_context.add_table(table);
     tables.push_back(table);
-    table_map.insert({table_name, table});
+    // table_map.insert({table_name, table});
+    table_map.insert({it->second, table});
   }
   //李晓鹏 这里是处理未绑定的问题 将unbound... Expr 转化为 普通的expr
   // collect query fields in `select` statement 
@@ -66,6 +70,17 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   ExpressionBinder expression_binder(binder_context);
   
   for (unique_ptr<Expression> &expression : select_sql.expressions) {
+    //如果有字段表达式，就要检查表名是否为设置的别名，是则把名字改回来
+    if(expression.get()->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+    
     RC rc = expression_binder.bind_expression(expression, bound_expressions);
     if (OB_FAIL(rc)) {
       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
@@ -81,6 +96,219 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return rc;
     }
   }
+
+  /*   找到条件表达式中的未绑定字段表达式   */
+  for(ConditionSqlNode condition : select_sql.conditions){
+    if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.left_expr);
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+    if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+  }
+  /*   找到条件表达式中的未绑定字段表达式   */
+
+  vector<unique_ptr<Expression>> having_expressions;
+  for(ConditionSqlNode condition: select_sql.having){
+    //找到聚合表达式指针,讲其加入到having_expressions_中去,找到就给它绑定咯
+    if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_AGGREGATION)
+    {
+      Expression * tmp = new UnboundAggregateExpr(dynamic_cast<UnboundAggregateExpr*>(condition.left_expr));
+      unique_ptr <Expression> having_expression(static_cast<Expression *>(tmp));
+      RC rc = expression_binder.bind_expression(having_expression, having_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind having_expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+    //左右都要找
+    if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_AGGREGATION)
+    {
+      Expression * tmp = new UnboundAggregateExpr(dynamic_cast<UnboundAggregateExpr*>(condition.right_expr));
+      unique_ptr <Expression> having_expression(static_cast<Expression *>(tmp));
+      RC rc = expression_binder.bind_expression(having_expression, having_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind having_expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+  }
+
+  // 李晓鹏笔记 select_sql_order_by 是解析出来后面的条件
+  vector<unique_ptr<Expression>> order_by_expressions;
+    for (unique_ptr<Expression> &expression : select_sql.order_by) {
+    RC rc = expression_binder.bind_expression(expression, order_by_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind order_by_expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+
+  Table *default_table = nullptr;
+  if (tables.size() == 1) {
+    default_table = tables[0];
+  }
+
+  // create filter statement in `where` statement
+  FilterStmt *filter_stmt = nullptr;
+  RC          rc          = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      select_sql.conditions.data(),
+      static_cast<int>(select_sql.conditions.size()),
+      filter_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct filter stmt");
+    return rc;
+  }
+
+  //多加一个过滤stmt
+  FilterStmt *having_filter_stmt = nullptr;
+  rc                             = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      select_sql.having.data(),
+      static_cast<int>(select_sql.having.size()),
+      having_filter_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct having_filter stmt");
+    return rc;
+  }
+  //处理on条件的 和上面的where是一样的 只是这里是个循环 有多个on条件
+  std::vector<std::vector<ConditionSqlNode>*>  join_conditions_sql_node = select_sql.join_conditions;
+  std::vector<FilterStmt*> join_filter;
+  for(std::vector<ConditionSqlNode>* &on_conditions_ptr : join_conditions_sql_node){
+     std::vector<ConditionSqlNode> on_conditions = *on_conditions_ptr;
+     FilterStmt * join_filter_stmt = nullptr;
+     RC          rc          = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      on_conditions.data(),
+      static_cast<int>(on_conditions.size()),
+      join_filter_stmt);
+      if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct filter stmt");
+    return rc;
+    }
+      join_filter.push_back(join_filter_stmt);
+  }
+
+  // everything alright
+  SelectStmt *select_stmt = new SelectStmt();
+
+  select_stmt->tables_.swap(tables);
+  select_stmt->query_expressions_.swap(bound_expressions);
+  select_stmt->filter_stmt_        = filter_stmt;
+  select_stmt->group_by_.swap(group_by_expressions);
+  select_stmt->having_expressions_.swap(having_expressions);
+  select_stmt->having_filter_stmt_ = having_filter_stmt;
+  select_stmt->order_by_.swap(order_by_expressions);
+  select_stmt->join_filter_.swap(join_filter);
+  stmt                      = select_stmt;
+  return RC::SUCCESS;
+}
+
+RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
+{
+  if (nullptr == db) {
+    LOG_WARN("invalid argument. db is null");
+    return RC::INVALID_ARGUMENT;
+  }
+
+  BinderContext binder_context;
+
+  // collect tables in `from` statement
+  vector<Table *>                tables;
+  unordered_map<string, Table *> table_map;
+  for (size_t i = 0; i < select_sql.relations.size(); i++) {
+    auto it = select_sql.relations.begin(); // 获取指向第一个元素的迭代器
+    std::advance(it, i);
+    const char *table_name = it->first.c_str();
+    if (nullptr == table_name) {
+      LOG_WARN("invalid argument. relation name is null. index=%d", i);
+      return RC::INVALID_ARGUMENT;
+    }
+
+    Table *table = db->find_table(table_name);
+    if (nullptr == table) {
+      LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+
+    binder_context.add_table_alias(table_name, it->second.c_str());
+    binder_context.add_table(table);
+    tables.push_back(table);
+    // table_map.insert({table_name, table});
+    table_map.insert({it->second, table});
+  }
+  //李晓鹏 这里是处理未绑定的问题 将unbound... Expr 转化为 普通的expr
+  // collect query fields in `select` statement 
+  vector<unique_ptr<Expression>> bound_expressions;
+  ExpressionBinder expression_binder(binder_context);
+  
+  for (unique_ptr<Expression> &expression : select_sql.expressions) {
+    //如果有字段表达式，就要检查表名是否为设置的别名，是则把名字改回来
+    if(expression.get()->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+    
+    RC rc = expression_binder.bind_expression(expression, bound_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  vector<unique_ptr<Expression>> group_by_expressions;
+  for (unique_ptr<Expression> &expression : select_sql.group_by) {
+    RC rc = expression_binder.bind_expression(expression, group_by_expressions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  /*   找到条件表达式中的未绑定字段表达式   */
+  for(ConditionSqlNode condition : select_sql.conditions){
+    if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.left_expr);
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+    if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_FIELD){
+      auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
+      for(const auto& pair : select_sql.relations){
+        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.first);
+          break;
+        }
+      }
+    }
+  }
+  /*   找到条件表达式中的未绑定字段表达式   */
 
   vector<unique_ptr<Expression>> having_expressions;
   for(ConditionSqlNode condition: select_sql.having){
