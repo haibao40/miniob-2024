@@ -172,8 +172,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::map<std::string, std::string> *       relation_list;
-  std::map<std::string, std::string> *       join_list;
+  std::unordered_map<std::string, std::string> *       relation_list;
+  std::unordered_map<std::string, std::string> *       join_list;
   std::vector<float> *                       float_list;
   char *                                     string;
   int                                        number;
@@ -828,7 +828,7 @@ relation:
     ;
 rel_list:
     relation {
-      $$ = new std::map<std::string, std::string>();
+      $$ = new std::unordered_map<std::string, std::string>();
       $$->insert({$1, $1});
       free($1);
     }
@@ -836,20 +836,20 @@ rel_list:
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
 
       $$->insert($$->begin(), {$1, $1});
       free($1);
     }
     | relation AS ID{
-      $$ = new std::map<std::string, std::string>();
+      $$ = new std::unordered_map<std::string, std::string>();
       $$->insert({$1, $3});
       free($1);
       free($3);
     }
     | relation ID{
-      $$ = new std::map<std::string, std::string>();
+      $$ = new std::unordered_map<std::string, std::string>();
       $$->insert({$1, $2});
       free($1);
       free($2);
@@ -858,7 +858,7 @@ rel_list:
       if ($5 != nullptr) {
         $$ = $5;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
       $$->insert($$->begin(), {$1, $3});
       free($1);
@@ -868,7 +868,7 @@ rel_list:
       if ($4!= nullptr) {
         $$ = $4;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
       $$->insert($$->begin(), {$1, $2});
       free($1);
@@ -887,23 +887,23 @@ rel_list:
 
 join_in_right_list:
   INNER JOIN relation ON condition_list {
-    $$ = new std::map<std::string, std::string>();
+    $$ = new std::unordered_map<std::string, std::string>();
     join_conditions.push_back($5);
     $$->insert({$3, $3});
   }
   | INNER JOIN relation AS ID ON condition_list {
-    $$ = new std::map<std::string, std::string>();
+    $$ = new std::unordered_map<std::string, std::string>();
     join_conditions.push_back($7);
     $$->insert({$3, $5});
   }
   | INNER JOIN  relation {
-    $$ = new std::map<std::string, std::string>();
+    $$ = new std::unordered_map<std::string, std::string>();
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
     join_conditions.push_back(temp);
     $$->insert({$3,$3});
   }
   | INNER JOIN  relation AS ID {
-    $$ = new std::map<std::string, std::string>();
+    $$ = new std::unordered_map<std::string, std::string>();
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
     join_conditions.push_back(temp);
     $$->insert({$3,$5});
@@ -914,7 +914,7 @@ join_in_right_list:
     if ($4 != nullptr) {
         $$ = $4;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
       $$->insert($$->begin(), {$3, $3});
       free($3);
@@ -925,7 +925,7 @@ join_in_right_list:
     if ($6 != nullptr) {
         $$ = $6;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
       $$->insert($$->begin(), {$3, $5});
       free($3);
@@ -936,7 +936,7 @@ join_in_right_list:
     if ($6 != nullptr) {
         $$ = $6;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
       $$->insert($$->begin(), {$3, $3});
       free($3);
@@ -946,7 +946,7 @@ join_in_right_list:
     if ($8 != nullptr) {
         $$ = $8;
       } else {
-        $$ = new std::map<std::string, std::string>();
+        $$ = new std::unordered_map<std::string, std::string>();
       }
       $$->insert($$->begin(), {$3, $5});
       free($3);
@@ -959,7 +959,7 @@ join_in:
     if ($2 != nullptr) {
       $$ = $2;
     } else{
-      $$ = new std::map<std::string, std::string>();
+      $$ = new std::unordered_map<std::string, std::string>();
     }
     $$->insert($$->begin(), {$1, $1});
     free($1);
@@ -968,7 +968,7 @@ join_in:
     if ($4 != nullptr) {
       $$ = $4;
     } else{
-      $$ = new std::map<std::string, std::string>();
+      $$ = new std::unordered_map<std::string, std::string>();
     }
     $$->insert($$->begin(), {$1, $3});
     free($1);
