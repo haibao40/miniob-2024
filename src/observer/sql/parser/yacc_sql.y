@@ -346,7 +346,9 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $4;
       create_index.relation_name = $6;
-      create_index.attribute_names.swap(*$8);
+      for (const auto& pair : *$8) {
+         create_index.attribute_names.push_back(pair.first);
+      }
       create_index.unique = $2;
       free($4);
       free($6);
