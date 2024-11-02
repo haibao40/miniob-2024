@@ -80,6 +80,8 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(FIELD_CAN_NOT_BE_NULL)       \
   DEFINE_RC(UNIQUE_FAILD)                \
   DEFINE_RC(ILLEGAL_SUB_QUERY)           \
+  DEFINE_RC(ILLEGAL_SUB_QUERY_zero_record) \
+  DEFINE_RC(ILLEGAL_SUB_QUERY_multiple_record) \
   DEFINE_RC(UNSUPPORTED)
 
 enum class RC
@@ -93,3 +95,8 @@ extern const char *strrc(RC rc);
 
 extern bool OB_SUCC(RC rc);
 extern bool OB_FAIL(RC rc);
+
+/***
+ * @brief 判断错误码中是否是表示某一种自定义的子查询异常
+ */
+extern bool OB_ILLEGAL_SUB_QUERY(RC rc);

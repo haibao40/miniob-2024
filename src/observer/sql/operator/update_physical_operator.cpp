@@ -121,7 +121,10 @@ RC UpdatePhysicalOperator::get_new_record_values(RowTuple* old_data_tuple, vecto
     if(rc != RC::SUCCESS) {
       sql_debug("在执行update更新的过程中，获取表达式的值失败,rc = %s", strrc(rc));
       LOG_ERROR("更新过程中，获取表达式的值失败");
-      return rc;
+      if(rc == RC::ILLEGAL_SUB_QUERY_zero_record) {  //update_select中，子查询为空的情况下，要返回success;
+        return RC::SUCCESS;
+      }
+      return rc;      //其它情况的失败，还是返回false
     }
 
     //判断要更新的数据类型与原类型是否一致，不一致尝试进行类型转换，空值则跳过判断

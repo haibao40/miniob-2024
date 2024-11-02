@@ -33,3 +33,13 @@ const char *strrc(RC rc)
 bool OB_SUCC(RC rc) { return rc == RC::SUCCESS; }
 
 bool OB_FAIL(RC rc) { return rc != RC::SUCCESS; }
+
+bool OB_ILLEGAL_SUB_QUERY(RC rc)
+{
+  if(rc == RC::ILLEGAL_SUB_QUERY || rc == RC::ILLEGAL_SUB_QUERY_zero_record || rc == RC::ILLEGAL_SUB_QUERY_multiple_record) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}

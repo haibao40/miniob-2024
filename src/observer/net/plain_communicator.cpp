@@ -245,11 +245,11 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
     rc = write_tuple_result(sql_result);
   }
 
-  if (OB_FAIL(rc) && rc != RC::ILLEGAL_SUB_QUERY) {  //异常的子查询，当做一种特例，不是失败
+  if (OB_FAIL(rc) && !OB_ILLEGAL_SUB_QUERY(rc)) {  //异常的子查询，当做一种特例，不是失败
     return rc;
   }
 
-  if ( rc == RC::ILLEGAL_SUB_QUERY) {     //异常的子查询，要返回Failure
+  if ( OB_ILLEGAL_SUB_QUERY(rc)) {     //异常的子查询，要返回Failure
     sql_result->set_return_code(RC::ILLEGAL_SUB_QUERY);
     return write_state(event, need_disconnect);  //这个地方实现了返回SUCCESS 或者failure的逻辑
   }

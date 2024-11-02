@@ -1228,7 +1228,12 @@ RC SubqueryExpr::get_signal_value_in_non_correlated_query(Value& value) const
       if(rc != RC::SUCCESS) {
         LOG_ERROR("关闭子查询物理算子失败");
       }
-      return RC::ILLEGAL_SUB_QUERY;
+      if(value_list.size() == 0) {
+        return RC::ILLEGAL_SUB_QUERY_zero_record;
+      }
+      else{
+        return RC::ILLEGAL_SUB_QUERY_multiple_record;
+      }
     }
     signal_result_value_ = value_list[0];
     physical_operator_->close();
