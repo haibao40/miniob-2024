@@ -32,7 +32,7 @@ RC BplusTreeIndex::create(Table *table, const char *file_name, const IndexMeta &
   for(auto fieldMeta:*field_metas){
     length_metas = length_metas + fieldMeta->len();
   }
-  RC rc = index_handler_.create(table->db()->log_handler(), 
+  RC rc = index_handler_.create(table->db()->log_handler(),
               bpm, file_name, AttrType::CHARS, length_metas + field_metas_->size());
   if (RC::SUCCESS != rc) {
     LOG_WARN("Failed to create index_handler, file_name:%s, index:%s, field:%s, rc:%s",
@@ -118,7 +118,7 @@ RC BplusTreeIndex::open(Table *table, const char *file_name, const IndexMeta &in
   return RC::SUCCESS;
 }
 RC BplusTreeIndex::get_entry(const char * record , list<RID> &rids){
-  const char* newRecord = create_new_record(record);
+  const char* newRecord = create_new_record(record,true);
   int length_new_record = 0;
   for(auto field_meta:*field_metas_){
     length_new_record = length_new_record + field_meta.len(); //报错 field_meta好像被释放掉了
@@ -147,13 +147,14 @@ RC BplusTreeIndex::destroy()
 }
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
-{ 
+{
   //多字段索引的处理
   //const vector<const FieldMeta *>* field_metas_;
-  const char* newRecord = create_new_record(record);
+  const char* newRecord = create_new_record(record,false);
   return index_handler_.insert_entry(newRecord, rid);
 }
-const char* BplusTreeIndex::create_new_record(const char *record){
+//为了方便我们不改比较器
+const char* BplusTreeIndex::create_new_record(const char *record,bool is_find){
   //多字段索引的处理
   //const char* newRecord;
   int length_new_record = 0;
@@ -166,7 +167,13 @@ const char* BplusTreeIndex::create_new_record(const char *record){
   for(auto &field_meta :*field_metas_){
     bool is_null = false;
     RowTuple::field_value_is_null(table_,const_cast<char*>(record),field_meta.name(),is_null);
-    newRecord[current] = is_null;
+    if(is_find==true && is_null == true){ //设置一个不一样的值，这样b+树就可以返回false了
+
+       newRecord[current] = '9';
+    }
+    else{
+      newRecord[current] = is_null;
+    }
     current++;
     if(is_null == false){
     for(int i=0;i<field_meta.len();i++){
@@ -184,7 +191,7 @@ const char* BplusTreeIndex::create_new_record(const char *record){
 }
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
 {
-  const char* newRecord = create_new_record(record);
+  const char* newRecord = create_new_record(record,false);
   return index_handler_.delete_entry(newRecord, rid);
 }
 
