@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 class Tuple;
 class PhysicalOperator;
 class LogicalOperator;
+class HierarchicalScope;
 /**
  * @defgroup Expression
  * @brief 表达式
@@ -228,6 +229,16 @@ private:
   Field field_;
 };
 
+/***
+* @brief 表示一个字段的信息，为啥不用已经有的tupleCellSpec,因为感觉char*风格的C字符串用起来不方便
+*/
+struct FieldInfo{
+  std::string table_name;   //表名
+  std::string table_alias;  //表的别名
+  std::string field_name;   //真实的字段名
+  std::string field_alias;  //字段的别名
+};
+
 /**
  * @brief 常量值表达式
  * @ingroup Expression
@@ -256,9 +267,29 @@ public:
 
   void         get_value(Value &value) const { value = value_; }
   const Value &get_value() const { return value_; }
+  void set_value(Value &value) const { value_ = value; }
+  bool is_runtime() const { return is_runtime_;}
+  ///将这个常量表达式设置为运行时常量
+  void set_runtime(FieldInfo field_info) const
+  {
+    field_info_ = field_info;
+    is_runtime_ = true;
+  }
+
+  FieldInfo& get_field_info() const{ return field_info_; }
+  void set_field_info(FieldInfo& field_info) const{ field_info_ = field_info; }
+
+  void set_hierarchical_scope(HierarchicalScope* scope) const {scope_ = scope;}
+  HierarchicalScope* get_hierarchical_scope(){ return scope_;}
 
 private:
-  Value value_;
+  mutable Value value_;
+  ///标志位：用来表示是否是一个运行时常量,运行时常量用于子查询中，具体的值依赖于上层查询，在子查询执行之前才能确定常量的值
+  mutable bool is_runtime_ = false;
+  ///运行时常量对应的字段信息
+  mutable FieldInfo field_info_;
+  ///之后要去获取值的作用域
+  mutable HierarchicalScope* scope_ = nullptr;
 };
 
 /**
