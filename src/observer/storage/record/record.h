@@ -176,6 +176,22 @@ public:
     this->data_ = data;
     this->len_  = len;
   }
+
+  void set_len(int len){
+    this->len_ = len;
+  }
+
+  void add_data(char *data, int len){
+    memcpy(this->data_ + this->len_, data, len);
+    this->len_ += len;
+  }
+
+  void reset(){
+    this->data_ = nullptr;
+    this->len_  = 0;
+    owner_ = false;
+  }
+
   void set_data_owner(char *data, int len)
   {
     ASSERT(len != 0, "the len of data should not be 0");
@@ -238,12 +254,10 @@ public:
     this->rid_.slot_num = slot_num;
   }
   RID       &rid() { return rid_; }
-  std::vector<RID> &rids() { return rids_; }
   const RID &rid() const { return rid_; }
 
 private:
   RID rid_;
-  std::vector<RID> rids_;
 
   char *data_  = nullptr;
   int   len_   = 0;      /// 如果不是record自己来管理内存，这个字段可能是无效的

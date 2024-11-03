@@ -108,6 +108,8 @@ public:
    * @param record 记录的内容
    */
   RC insert_record(Frame *frame, const RID &rid, const char *record);
+  // RC insert_headof_record(Frame *frame, const RID &rid, const char *record, const RID next_rid);
+  // RC insert_partof_record(Frame *frame, const RID &rid, const char *record, const RID next_rid);
 
   /**
    * @brief 删除一条记录

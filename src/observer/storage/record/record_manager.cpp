@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Longda on 2021/4/13.
 //
 #include <vector>
+#include <algorithm>
 #include "storage/record/record_manager.h"
 #include "common/log/log.h"
 #include "storage/common/condition_filter.h"
@@ -21,6 +22,8 @@ See the Mulan PSL v2 for more details. */
 using namespace common;
 
 static constexpr int PAGE_HEADER_SIZE = (sizeof(PageHeader));
+static constexpr int RID_POINTER      = (sizeof(int) + sizeof(PageNum) + sizeof(SlotNum));
+static constexpr int MAX_RECORD_SIZE  =  BP_PAGE_DATA_SIZE - PAGE_HEADER_SIZE - RID_POINTER - 37;
 RecordPageHandler   *RecordPageHandler::create(StorageFormat format)
 {
   if (format == StorageFormat::ROW_FORMAT) {
@@ -49,7 +52,8 @@ int page_record_capacity(int page_size, int record_size, int fixed_size)
 {
   // (record_capacity * record_size) + record_capacity/8 + 1 <= (page_size - fix_size)
   // ==> record_capacity = ((page_size - fix_size) - 1) / (record_size + 0.125)
-  return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125));
+  // return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125));
+  return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125 + RID_POINTER));
 }
 
 /**
@@ -89,6 +93,18 @@ RC RecordPageIterator::next(Record &record)
   if (next_slot_num_ >= 0) {
     next_slot_num_ = bitmap_.next_setted_bit(next_slot_num_ + 1);
   }
+  return record.rid().slot_num != -1 ? RC::SUCCESS : RC::RECORD_EOF;
+}
+
+RC RecordPageIterator::next(Record &record, RID &next_rid)
+{
+  RC rc = record_page_handler_->get_record(RID(page_num_, next_slot_num_), record, next_rid);
+
+  if (next_slot_num_ >= 0) {
+    next_slot_num_ = bitmap_.next_setted_bit(next_slot_num_ + 1);
+  }
+  if(rc == RC::PART_OF_RECORD)
+    return rc;
   return record.rid().slot_num != -1 ? RC::SUCCESS : RC::RECORD_EOF;
 }
 
@@ -291,7 +307,143 @@ RC RowRecordPageHandler::insert_record(const char *data, RID *rid)
 
   // assert index < page_header_->record_capacity
   char *record_data = get_record_data(index);
+  
   memcpy(record_data, data, page_header_->record_real_size);
+  // memcpy(record_data + page_header_->record_size, 0, RID_POINTER);//记录没有下一段
+
+  frame_->mark_dirty();
+
+  if (rid) {
+    rid->page_num = get_page_num();
+    rid->slot_num = index;
+  }
+
+  // LOG_TRACE("Insert record. rid page_num=%d, slot num=%d", get_page_num(), index);
+  return RC::SUCCESS;
+}
+RC RowRecordPageHandler::insert_record(const char *data, RID *rid, const RID next_rid)
+{
+  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, 
+         "cannot insert record into page while the page is readonly");
+
+  if (page_header_->record_num == page_header_->record_capacity) {
+    LOG_WARN("Page is full, page_num %d:%d.", disk_buffer_pool_->file_desc(), frame_->page_num());
+    return RC::RECORD_NOMEM;
+  }
+
+  // 找到空闲位置
+  Bitmap bitmap(bitmap_, page_header_->record_capacity);
+  int    index = bitmap.next_unsetted_bit(0);
+  bitmap.set_bit(index);
+  page_header_->record_num++;
+
+  RC rc = log_handler_.insert_record(frame_, RID(get_page_num(), index), data);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to insert record. page_num %d:%d. rc=%s", disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
+    // return rc; // ignore errors
+  }
+
+  // assert index < page_header_->record_capacity
+  char *record_data = get_record_data(index);
+  
+  int tmp = 1;
+  memcpy(record_data, data, page_header_->record_real_size);
+  memcpy(record_data + page_header_->record_size, &tmp, sizeof(int));//记录是否为record的头部
+  memcpy(record_data + page_header_->record_size+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
+  memcpy(record_data + page_header_->record_size+sizeof(int)+sizeof(PageNum), &next_rid.slot_num, sizeof(SlotNum));
+
+  frame_->mark_dirty();
+
+  if (rid) {
+    rid->page_num = get_page_num();
+    rid->slot_num = index;
+  }
+
+  // LOG_TRACE("Insert record. rid page_num=%d, slot num=%d", get_page_num(), index);
+  return RC::SUCCESS;
+}
+RC RowRecordPageHandler::insert_headof_record(const char *data, RID *rid, const RID next_rid)
+{
+  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, 
+         "cannot insert record into page while the page is readonly");
+
+  if (page_header_->record_num == page_header_->record_capacity) {
+    LOG_WARN("Page is full, page_num %d:%d.", disk_buffer_pool_->file_desc(), frame_->page_num());
+    return RC::RECORD_NOMEM;
+  }
+
+  // 找到空闲位置
+  Bitmap bitmap(bitmap_, page_header_->record_capacity);
+  int    index = bitmap.next_unsetted_bit(0);
+  bitmap.set_bit(index);
+  page_header_->record_num++;
+
+  RC rc = log_handler_.insert_record(frame_, RID(get_page_num(), index), data);
+  // RC rc = log_handler_.insert_headof_record(frame_, RID(get_page_num(), index), data, next_rid);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to insert record. page_num %d:%d. rc=%s", disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
+    // return rc; // ignore errors
+  }
+
+  // assert index < page_header_->record_capacity
+  char *record_data = get_record_data(index);
+  
+  if(memcmp("", data, 1) == 0)
+    return RC::SUCCESS;
+  int tmp = 1;
+  memcpy(record_data, data, page_header_->record_real_size);
+  memcpy(record_data + page_header_->record_size, &tmp, sizeof(int));//记录是否为record的头部
+  memcpy(record_data + page_header_->record_size+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
+  memcpy(record_data + page_header_->record_size+sizeof(int)+sizeof(PageNum), &next_rid.slot_num, sizeof(SlotNum));
+
+  int flag = *reinterpret_cast<int*>(record_data + page_header_->record_size);
+
+  PageNum pagenum = *reinterpret_cast<PageNum*>(record_data + page_header_->record_size + sizeof(int));
+  SlotNum slotnum = *reinterpret_cast<SlotNum*>(record_data + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
+  printf("flag:%d, page:%d, slot:%d\n", flag, pagenum, slotnum);
+
+  frame_->mark_dirty();
+
+  if (rid) {
+    rid->page_num = get_page_num();
+    rid->slot_num = index;
+  }
+
+  // LOG_TRACE("Insert record. rid page_num=%d, slot num=%d", get_page_num(), index);
+  return RC::SUCCESS;
+}
+RC RowRecordPageHandler::insert_partof_record(const char *data, RID *rid, const RID next_rid)
+{
+  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, 
+         "cannot insert record into page while the page is readonly");
+
+  if (page_header_->record_num == page_header_->record_capacity) {
+    LOG_WARN("Page is full, page_num %d:%d.", disk_buffer_pool_->file_desc(), frame_->page_num());
+    return RC::RECORD_NOMEM;
+  }
+
+  // 找到空闲位置
+  Bitmap bitmap(bitmap_, page_header_->record_capacity);
+  int    index = bitmap.next_unsetted_bit(0);
+  bitmap.set_bit(index);
+  page_header_->record_num++;
+
+  RC rc = log_handler_.insert_record(frame_, RID(get_page_num(), index), data);
+  // RC rc = log_handler_.insert_partof_record(frame_, RID(get_page_num(), index), data, next_rid);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to insert record. page_num %d:%d. rc=%s", disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
+    // return rc; // ignore errors
+  }
+
+  // assert index < page_header_->record_capacity
+  char *record_data = get_record_data(index);
+
+  int tmp = 0;//1表示头部，0表示其他
+  if(memcmp("", data, 1) != 0)
+    memcpy(record_data, data, page_header_->record_real_size);
+  memcpy(record_data + page_header_->record_size, &tmp, sizeof(int));//记录是否为record的头部
+  memcpy(record_data + page_header_->record_size+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
+  memcpy(record_data + page_header_->record_size+sizeof(int)+sizeof(PageNum), &next_rid.slot_num, sizeof(SlotNum));
 
   frame_->mark_dirty();
 
@@ -400,8 +552,60 @@ RC RowRecordPageHandler::get_record(const RID &rid, Record &record)
     return RC::RECORD_NOT_EXIST;
   }
 
+  int flag = *reinterpret_cast<int*>(get_record_data(rid.slot_num) + page_header_->record_size);
+  if(flag == 0)
+    return RC::PART_OF_RECORD;
+
+  // PageNum pagenum = *reinterpret_cast<PageNum*>(get_record_data(rid.slot_num) + page_header_->record_size + sizeof(int));
+  // SlotNum slotnum = *reinterpret_cast<SlotNum*>(get_record_data(rid.slot_num) + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
+  // int true_size = page_header_->record_real_size;
+
   record.set_rid(rid);
+  // record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
   record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
+  return RC::SUCCESS;
+}
+
+RC RowRecordPageHandler::get_record(const RID &rid, Record &record, RID &next_rid)
+{
+  if (rid.slot_num >= page_header_->record_capacity) {
+    LOG_ERROR("Invalid slot_num %d, exceed page's record capacity, frame=%s, page_header=%s",
+              rid.slot_num, frame_->to_string().c_str(), page_header_->to_string().c_str());
+    return RC::RECORD_INVALID_RID;
+  }
+
+  Bitmap bitmap(bitmap_, page_header_->record_capacity);
+  if (!bitmap.get_bit(rid.slot_num)) {
+    LOG_ERROR("Invalid slot_num:%d, slot is empty, page_num %d.", rid.slot_num, frame_->page_num());
+    return RC::RECORD_NOT_EXIST;
+  }
+
+  int flag = *reinterpret_cast<int*>(get_record_data(rid.slot_num) + page_header_->record_size);
+  // if(flag == 0)
+  //   return RC::PART_OF_RECORD;
+
+  PageNum pagenum = *reinterpret_cast<PageNum*>(get_record_data(rid.slot_num) + page_header_->record_size + sizeof(int));
+  SlotNum slotnum = *reinterpret_cast<SlotNum*>(get_record_data(rid.slot_num) + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
+  RID rid_tmp(pagenum, slotnum);
+  next_rid = rid_tmp;
+
+  if(flag == 1){
+    record.set_rid(rid);
+    // record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
+    record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
+    if(pagenum != 0 && slotnum != 0){
+      Record record_tmp;
+      record_tmp.new_record(65536);
+      memcpy(record_tmp.data(), get_record_data(rid.slot_num), page_header_->record_real_size);
+      record_tmp.set_len(page_header_->record_real_size);
+      record = record_tmp;
+    }
+  }else if(flag == 0){
+    if(record.len() >= MAX_RECORD_SIZE)
+      record.add_data(get_record_data(rid.slot_num), page_header_->record_real_size);
+    return RC::PART_OF_RECORD;
+  }
+  
   return RC::SUCCESS;
 }
 
@@ -603,13 +807,11 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
   }
 
   // 找到空闲位置
-  return record_page_handler->insert_record(data, rid);
+  return record_page_handler->insert_headof_record(data, rid, {0,0});
 }
 
-RC RecordFileHandler::insert_record(const char *data, int record_size, int &offset,std::vector<RID>& rids)
+RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid, const RID rid_next, int flag)
 {
-  int r_size = table_meta_->record_size(); //每个记录的大小
-  RID rid;
   RC ret = RC::SUCCESS;
 
   unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
@@ -649,8 +851,11 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, int &offs
 
     current_page_num = frame->page_num();
 
+    int max_record_size;
+    //当记录长度可能超过页面限制时，使max_record_size来初始化页面管理者
+    max_record_size = std::min(MAX_RECORD_SIZE, record_size);
     ret = record_page_handler->init_empty_page(
-        *disk_buffer_pool_, *log_handler_, current_page_num, record_size, table_meta_);
+        *disk_buffer_pool_, *log_handler_, current_page_num, max_record_size, table_meta_);
     if (OB_FAIL(ret)) {
       frame->unpin();
       LOG_ERROR("Failed to init empty page. ret:%d", ret);
@@ -670,17 +875,98 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, int &offs
     lock_.unlock();
   }
 
-  while((ret = record_page_handler->insert_record(data+offset, &rid)) == RC::SUCCESS){
-    offset += r_size; //offset代表当前插入多少数据了，以位为单位
-    if(offset >= record_size)
+  // 找到空闲位置
+  if(flag == 1)
+    return record_page_handler->insert_headof_record(data, rid, rid_next);
+  return record_page_handler->insert_partof_record(data, rid, rid_next);
+}
+
+RC RecordFileHandler::insert_record(const char *data, int record_size, int offset, RID *rid)
+{
+  // int r_size = table_meta_->record_size(); //每个记录的大小
+  RID rid_next;
+  RC ret = RC::SUCCESS;
+
+  unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
+  bool                          page_found       = false;
+  PageNum                       current_page_num = 0;
+
+  // 当前要访问free_pages对象，所以需要加锁。在非并发编译模式下，不需要考虑这个锁
+  lock_.lock();
+
+  // 找到没有填满的页面
+  while (!free_pages_.empty()) {
+    current_page_num = *free_pages_.begin();
+
+    
+    ret = record_page_handler->init(*disk_buffer_pool_, *log_handler_, current_page_num, ReadWriteMode::READ_WRITE);
+    if (OB_FAIL(ret)) {
+      lock_.unlock();
+      LOG_WARN("failed to init record page handler. page num=%d, rc=%d:%s", current_page_num, ret, strrc(ret));
+      return ret;
+    }
+
+    if (!record_page_handler->is_full()) {
+      page_found = true;
       break;
+    }
+    record_page_handler->cleanup();
+    free_pages_.erase(free_pages_.begin());
+  }
+  lock_.unlock();  // 如果找到了一个有效的页面，那么此时已经拿到了页面的写锁
 
-    rids.push_back(rid);
+  // 找不到就分配一个新的页面
+  if (!page_found) {
+    Frame *frame = nullptr;
+    if ((ret = disk_buffer_pool_->allocate_page(&frame)) != RC::SUCCESS) {
+      LOG_ERROR("Failed to allocate page while inserting record. ret:%d", ret);
+      return ret;
+    }
+
+    current_page_num = frame->page_num();
+
+    int max_record_size;
+    //当记录长度可能超过页面限制时，使max_record_size来初始化页面管理者
+    // max_record_size = std::min(BP_PAGE_DATA_SIZE - PAGE_HEADER_SIZE - RID_POINTER - 37, record_size);
+    max_record_size = std::min(MAX_RECORD_SIZE, record_size);
+    ret = record_page_handler->init_empty_page(
+        *disk_buffer_pool_, *log_handler_, current_page_num, max_record_size, table_meta_);
+    if (OB_FAIL(ret)) {
+      frame->unpin();
+      LOG_ERROR("Failed to init empty page. ret:%d", ret);
+      // this is for allocate_page
+      return ret;
+    }
+
+    // frame 在allocate_page的时候，是有一个pin的，在init_empty_page时又会增加一个，所以这里手动释放一个
+    frame->unpin();
+
+    // 这里的加锁顺序看起来与上面是相反的，但是不会出现死锁
+    // 上面的逻辑是先加lock锁，然后加页面写锁，这里是先加上
+    // 了页面写锁，然后加lock的锁，但是不会引起死锁。
+    // 为什么？
+    lock_.lock();
+    free_pages_.insert(current_page_num);
+    lock_.unlock();
   }
 
-  if(ret == RC::RECORD_NOMEM){
-    return insert_record(data+offset, record_size, offset, rids);
+  if(record_size - offset > MAX_RECORD_SIZE){
+    ret = insert_record(data + MAX_RECORD_SIZE, record_size, offset + MAX_RECORD_SIZE, &rid_next);
+    if(!record_page_handler->is_full()){
+      if(offset == 0) ret = record_page_handler->insert_headof_record(data, rid, rid_next);
+      else ret = record_page_handler->insert_partof_record(data, rid, rid_next);
+    }else{
+      if(offset == 0) ret = insert_record(data, MAX_RECORD_SIZE, rid, rid_next, 1);
+      else  ret = insert_record(data, MAX_RECORD_SIZE, rid, rid_next, 0);
+    }
+  }else{
+    if(offset == 0) return record_page_handler->insert_headof_record(data, rid, {0, 0});
+    else return record_page_handler->insert_partof_record(data, rid, {0, 0});
   }
+
+  // if(ret == RC::RECORD_NOMEM){
+  //   return insert_record(data+offset, record_size, offset, rid);
+  // }
   // 找到空闲位置
   // return record_page_handler->insert_record(data, &rid);
   return ret;
@@ -740,10 +1026,31 @@ RC RecordFileHandler::get_record(const RID &rid, Record &record)
   }
 
   Record inplace_record;
-  rc = page_handler->get_record(rid, inplace_record);
-  if (OB_FAIL(rc)) {
+  RID next_rid;
+  RID after_rid;
+  // rc = page_handler->get_record(rid, inplace_record);
+  rc = page_handler->get_record(rid, inplace_record, next_rid);
+  if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get record from record page handle. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
     return rc;
+  }
+
+  //当还有下一段记录时，一直拿记录
+  if(rc == RC::SUCCESS){
+    while(next_rid.page_num != 0 && next_rid.slot_num != 0){
+      // printf("next_page_num:%d, next_slot_num:%d\n", next_rid.page_num, next_rid.slot_num);
+      rc = page_handler->init(*disk_buffer_pool_, *log_handler_, next_rid.page_num, ReadWriteMode::READ_WRITE);
+      if (OB_FAIL(rc)) {
+        LOG_ERROR("Failed to init record page handler.page number=%d", next_rid.page_num);
+        return rc;
+      }
+      rc = page_handler->get_record(next_rid, inplace_record, after_rid);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to get record from record page handle. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
+        return rc;
+      }
+      next_rid = after_rid;
+    }
   }
 
   record.copy_data(inplace_record.data(), inplace_record.len());
@@ -857,6 +1164,74 @@ RC RecordFileScanner::fetch_next_record()
   return RC::RECORD_EOF;
 }
 
+RC RecordFileScanner::my_fetch_next_record()
+{
+  RC rc = RC::SUCCESS;
+  RID next_rid;
+  if (record_page_iterator_.is_valid()) {
+    // 当前页面还是有效的，尝试看一下是否有有效记录
+    // rc = fetch_next_record_in_page();
+    rc = fetch_next_record_in_page(next_rid);
+    if (rc == RC::SUCCESS) {
+      // 有有效记录：RC::SUCCESS
+      // 或者出现了错误，rc != (RC::SUCCESS or RC::RECORD_EOF)
+      // RECORD_EOF 表示当前页面已经遍历完了
+      while(next_rid.page_num != 0 && next_rid.slot_num != 0){
+        rc = record_page_handler_->init(*disk_buffer_pool_, *log_handler_, next_rid.page_num, rw_mode_);
+        if (OB_FAIL(rc)) {
+          LOG_WARN("failed to init record page handler. page_num=%d, rc=%s", next_rid.page_num, strrc(rc));
+          return rc;
+        }
+
+        record_page_iterator_.init(record_page_handler_);
+        rc = fetch_next_record_in_page(next_rid);
+      }
+      return rc;
+    }
+    else if(rc != RC::RECORD_EOF){
+      return rc;
+    }
+  }
+
+  // 上个页面遍历完了，或者还没有开始遍历某个页面，那么就从一个新的页面开始遍历查找
+  while (bp_iterator_.has_next()) {
+    PageNum page_num = bp_iterator_.next();
+    record_page_handler_->cleanup();
+    rc = record_page_handler_->init(*disk_buffer_pool_, *log_handler_, page_num, rw_mode_);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to init record page handler. page_num=%d, rc=%s", page_num, strrc(rc));
+      return rc;
+    }
+
+    record_page_iterator_.init(record_page_handler_);
+    rc = fetch_next_record_in_page(next_rid);
+    if (rc == RC::SUCCESS) {
+      // 有有效记录：RC::SUCCESS
+      // 或者出现了错误，rc != (RC::SUCCESS or RC::RECORD_EOF)
+      // RECORD_EOF 表示当前页面已经遍历完了
+      while(next_rid.page_num != 0 && next_rid.slot_num != 0){
+        rc = record_page_handler_->init(*disk_buffer_pool_, *log_handler_, next_rid.page_num, rw_mode_);
+        if (OB_FAIL(rc)) {
+          LOG_WARN("failed to init record page handler. page_num=%d, rc=%s", next_rid.page_num, strrc(rc));
+          return rc;
+        }
+
+        record_page_iterator_.init(record_page_handler_);
+        rc = fetch_next_record_in_page(next_rid);
+      }
+      return rc;
+    }
+    else if(rc != RC::RECORD_EOF){
+      return rc;
+    }
+  }
+
+  // 所有的页面都遍历完了，没有数据了
+  next_record_.rid().slot_num = -1;
+  record_page_handler_->cleanup();
+  return RC::RECORD_EOF;
+}
+
 /**
  * @brief 遍历当前页面，尝试找到一条有效的记录
  */
@@ -865,6 +1240,47 @@ RC RecordFileScanner::fetch_next_record_in_page()
   RC rc = RC::SUCCESS;
   while (record_page_iterator_.has_next()) {
     rc = record_page_iterator_.next(next_record_);
+    if (rc != RC::SUCCESS) {
+      const auto page_num = record_page_handler_->get_page_num();
+      LOG_TRACE("failed to get next record from page. page_num=%d, rc=%s", page_num, strrc(rc));
+      return rc;
+    }
+
+    // 如果有过滤条件，就用过滤条件过滤一下
+    if (condition_filter_ != nullptr && !condition_filter_->filter(next_record_)) {
+      continue;
+    }
+
+    // 如果是某个事务上遍历数据，还要看看事务访问是否有冲突
+    if (trx_ == nullptr) {
+      return rc;
+    }
+
+    // 让当前事务探测一下是否访问冲突，或者需要加锁、等锁等操作，由事务自己决定
+    // TODO 把判断事务有效性的逻辑从Scanner中移除
+    rc = trx_->visit_record(table_, next_record_, rw_mode_);
+    if (rc == RC::RECORD_INVISIBLE) {
+      // 可以参考MvccTrx，表示当前记录不可见
+      // 这种模式仅在 readonly 事务下是有效的
+      continue;
+    }
+    return rc;
+  }
+
+  next_record_.rid().slot_num = -1;
+  return RC::RECORD_EOF;
+}
+
+RC RecordFileScanner::fetch_next_record_in_page(RID &next_rid)
+{
+  RC rc = RC::SUCCESS;
+  while (record_page_iterator_.has_next()) {
+    // rc = record_page_iterator_.next(next_record_);
+    rc = record_page_iterator_.next(next_record_, next_rid);
+    if(rc == RC::PART_OF_RECORD){
+      next_record_.reset();
+      continue;
+    }
     if (rc != RC::SUCCESS) {
       const auto page_num = record_page_handler_->get_page_num();
       LOG_TRACE("failed to get next record from page. page_num=%d, rc=%s", page_num, strrc(rc));
@@ -916,7 +1332,8 @@ RC RecordFileScanner::close_scan()
 
 RC RecordFileScanner::next(Record &record)
 {
-  RC rc = fetch_next_record();
+  // RC rc = fetch_next_record();
+  RC rc = my_fetch_next_record();
   if (OB_FAIL(rc)) {
     return rc;
   }

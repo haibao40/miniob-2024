@@ -255,7 +255,9 @@ RC Table::update_record(Record &record, vector<Value> &values, const char* field
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
-  rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  int offset = 0;
+  // rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), offset, &record.rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
     return rc;
@@ -274,6 +276,7 @@ RC Table::insert_record(Record &record)
                 name(), rc2, strrc(rc2));
     }
   }
+  record_num_++;
   return rc;
 }
 
@@ -282,12 +285,7 @@ RC Table::insert_record(Record &record, int record_size)
   RC rc = RC::SUCCESS;
   int offest = 0;
   // rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
-  if(record_size <= table_meta_.record_size()){
-    rc    = record_handler_->insert_record(record.data(), record_size, &record.rid());
-  }
-  else{
-    rc    = record_handler_->insert_record(record.data(), record_size, offest, record.rids());
-  }
+  rc    = record_handler_->insert_record(record.data(), record_size, offest, &record.rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
     return rc;
@@ -316,7 +314,8 @@ RC Table::visit_record(const RID &rid, function<bool(Record &)> visitor)
 
 RC Table::get_record(const RID &rid, Record &record)
 {
-  RC rc = record_handler_->get_record(rid, record);
+  RC rc = RC::SUCCESS;
+  rc = record_handler_->get_record(rid, record);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to visit record. rid=%s, table=%s, rc=%s", rid.to_string().c_str(), name(), strrc(rc));
     return rc;
@@ -380,13 +379,13 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 复制所有字段的值
-  // int   record_size = table_meta_.record_size();
-  int record_size = 0;
-  for(int i = 0; i < value_num + 1; i++) record_size += values[i].length();
+  int   record_size = table_meta_.record_size();
+  // int record_size = 0;
+  // for(int i = 0; i < value_num + 1; i++) record_size += values[i].length();
   char *record_data = (char *)malloc(record_size);
   memset(record_data, 0, record_size);
 
-  int offset = 0;
+  // int offset = 0;
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
@@ -398,20 +397,24 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
             table_meta_.name(), field->name(), value.to_string().c_str());
         break;
       }
-      // rc = set_value_to_record(record_data, real_value, field);
-      rc = set_value_to_record(record_data, real_value, field, offset);
+      rc = set_value_to_record(record_data, real_value, field);
+      // rc = set_value_to_record(record_data, real_value, field, offset);
     } else {
-      // rc = set_value_to_record(record_data, value, field);
-      rc = set_value_to_record(record_data, value, field, offset);
+      rc = set_value_to_record(record_data, value, field);
+      // rc = set_value_to_record(record_data, value, field, offset);
     }
-    offset += value.length();
+    // offset += value.length();
   }
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to make record. table name:%s", table_meta_.name());
     free(record_data);
     return rc;
   }
-
+ 
+  // printf("record1 : %s\n", record_data+0);
+  // printf("record2 : %s\n", record_data+3);
+  // printf("record3 : %s\n", record_data+7);
+  
   record.set_data_owner(record_data, record_size);
   return RC::SUCCESS;
 }

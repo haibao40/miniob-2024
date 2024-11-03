@@ -79,7 +79,8 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(DIVIDE_ZERO)                 \
   DEFINE_RC(FIELD_CAN_NOT_BE_NULL)       \
   DEFINE_RC(UNSUPPORTED)                 \
-  DEFINE_RC(WRONG_ATTR)          
+  DEFINE_RC(WRONG_ATTR)                  \
+  DEFINE_RC(PART_OF_RECORD) 
 
 enum class RC
 {

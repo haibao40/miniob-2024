@@ -115,6 +115,7 @@ public:
 
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
+  const int record_num() const { return record_num_; }
   const char *name() const;
 
   Db *db() const { return db_; }
@@ -148,6 +149,7 @@ private:
   Db                *db_ = nullptr;
   string             base_dir_;
   TableMeta          table_meta_;
+  int                record_num_       = 0;        /// 表中的记录数，有用
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
