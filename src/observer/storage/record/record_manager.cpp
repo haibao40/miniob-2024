@@ -396,10 +396,10 @@ RC RowRecordPageHandler::insert_headof_record(const char *data, RID *rid, const 
   memcpy(record_data + page_header_->record_size+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
   memcpy(record_data + page_header_->record_size+sizeof(int)+sizeof(PageNum), &next_rid.slot_num, sizeof(SlotNum));
 
-  int flag = *reinterpret_cast<int*>(record_data + page_header_->record_size);
+  // int flag = *reinterpret_cast<int*>(record_data + page_header_->record_size);
 
-  PageNum pagenum = *reinterpret_cast<PageNum*>(record_data + page_header_->record_size + sizeof(int));
-  SlotNum slotnum = *reinterpret_cast<SlotNum*>(record_data + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
+  // PageNum pagenum = *reinterpret_cast<PageNum*>(record_data + page_header_->record_size + sizeof(int));
+  // SlotNum slotnum = *reinterpret_cast<SlotNum*>(record_data + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
   // printf("flag:%d, page:%d, slot:%d\n", flag, pagenum, slotnum);
 
   frame_->mark_dirty();
