@@ -36,6 +36,12 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
   if(val.attr_type_ != AttrType::CHARS) return RC::INVALID_ARGUMENT;
   RC rc = RC::SUCCESS;
   switch (type) {
+    case AttrType::TEXTS:{
+      char * tmp = (char*)malloc(val.length_);
+      memcpy(tmp, val.value_.pointer_value_, val.length_);
+      // result.set_text(val.value_.pointer_value_, val.length_);
+      result.set_text(tmp, val.length_);
+    } break;
     case AttrType::DATES: {  //字符串类型可以转换为日期类型，如果日期不合法，会转换失败
       rc = cast_char_to_date(val, result);
     } break;
@@ -109,6 +115,9 @@ int CharType::cast_cost(AttrType type)
   }
   //表示可以将字符串类型转换为向量类型，类型转换的代价为1
   else if(type == AttrType::VECTORS) {
+    return 1;
+  }
+  else if(type == AttrType::TEXTS){
     return 1;
   }
   return INT32_MAX;

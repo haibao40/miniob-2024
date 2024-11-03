@@ -82,52 +82,53 @@ extern int yydebug;
     STRING_T = 283,                /* STRING_T  */
     FLOAT_T = 284,                 /* FLOAT_T  */
     DATE_T = 285,                  /* DATE_T  */
-    VECTOR_T = 286,                /* VECTOR_T  */
-    HELP = 287,                    /* HELP  */
-    EXIT = 288,                    /* EXIT  */
-    DOT = 289,                     /* DOT  */
-    INTO = 290,                    /* INTO  */
-    VALUES = 291,                  /* VALUES  */
-    FROM = 292,                    /* FROM  */
-    WHERE = 293,                   /* WHERE  */
-    AND = 294,                     /* AND  */
-    SET = 295,                     /* SET  */
-    ON = 296,                      /* ON  */
-    LOAD = 297,                    /* LOAD  */
-    DATA = 298,                    /* DATA  */
-    INFILE = 299,                  /* INFILE  */
-    EXPLAIN = 300,                 /* EXPLAIN  */
-    STORAGE = 301,                 /* STORAGE  */
-    FORMAT = 302,                  /* FORMAT  */
-    EQ = 303,                      /* EQ  */
-    LT = 304,                      /* LT  */
-    GT = 305,                      /* GT  */
-    LE = 306,                      /* LE  */
-    GE = 307,                      /* GE  */
-    NE = 308,                      /* NE  */
-    NOT = 309,                     /* NOT  */
-    LIKE = 310,                    /* LIKE  */
-    IS_ = 311,                     /* IS_  */
-    NULL_T = 312,                  /* NULL_T  */
-    MAX = 313,                     /* MAX  */
-    MIN = 314,                     /* MIN  */
-    AVG = 315,                     /* AVG  */
-    SUM = 316,                     /* SUM  */
-    COUNT = 317,                   /* COUNT  */
-    HAVING = 318,                  /* HAVING  */
-    INNER = 319,                   /* INNER  */
-    JOIN = 320,                    /* JOIN  */
-    AS = 321,                      /* AS  */
-    LEFT_BRACKET = 322,            /* LEFT_BRACKET  */
-    RIGHT_BRACKET = 323,           /* RIGHT_BRACKET  */
-    L2_DISTANCE = 324,             /* L2_DISTANCE  */
-    COSINE_DISTANCE = 325,         /* COSINE_DISTANCE  */
-    INNER_PRODUCT = 326,           /* INNER_PRODUCT  */
-    NUMBER = 327,                  /* NUMBER  */
-    FLOAT = 328,                   /* FLOAT  */
-    ID = 329,                      /* ID  */
-    SSS = 330,                     /* SSS  */
-    UMINUS = 331                   /* UMINUS  */
+    TEXT_T = 286,                  /* TEXT_T  */
+    VECTOR_T = 287,                /* VECTOR_T  */
+    HELP = 288,                    /* HELP  */
+    EXIT = 289,                    /* EXIT  */
+    DOT = 290,                     /* DOT  */
+    INTO = 291,                    /* INTO  */
+    VALUES = 292,                  /* VALUES  */
+    FROM = 293,                    /* FROM  */
+    WHERE = 294,                   /* WHERE  */
+    AND = 295,                     /* AND  */
+    SET = 296,                     /* SET  */
+    ON = 297,                      /* ON  */
+    LOAD = 298,                    /* LOAD  */
+    DATA = 299,                    /* DATA  */
+    INFILE = 300,                  /* INFILE  */
+    EXPLAIN = 301,                 /* EXPLAIN  */
+    STORAGE = 302,                 /* STORAGE  */
+    FORMAT = 303,                  /* FORMAT  */
+    EQ = 304,                      /* EQ  */
+    LT = 305,                      /* LT  */
+    GT = 306,                      /* GT  */
+    LE = 307,                      /* LE  */
+    GE = 308,                      /* GE  */
+    NE = 309,                      /* NE  */
+    NOT = 310,                     /* NOT  */
+    LIKE = 311,                    /* LIKE  */
+    IS_ = 312,                     /* IS_  */
+    NULL_T = 313,                  /* NULL_T  */
+    MAX = 314,                     /* MAX  */
+    MIN = 315,                     /* MIN  */
+    AVG = 316,                     /* AVG  */
+    SUM = 317,                     /* SUM  */
+    COUNT = 318,                   /* COUNT  */
+    HAVING = 319,                  /* HAVING  */
+    INNER = 320,                   /* INNER  */
+    JOIN = 321,                    /* JOIN  */
+    AS = 322,                      /* AS  */
+    LEFT_BRACKET = 323,            /* LEFT_BRACKET  */
+    RIGHT_BRACKET = 324,           /* RIGHT_BRACKET  */
+    L2_DISTANCE = 325,             /* L2_DISTANCE  */
+    COSINE_DISTANCE = 326,         /* COSINE_DISTANCE  */
+    INNER_PRODUCT = 327,           /* INNER_PRODUCT  */
+    NUMBER = 328,                  /* NUMBER  */
+    FLOAT = 329,                   /* FLOAT  */
+    ID = 330,                      /* ID  */
+    SSS = 331,                     /* SSS  */
+    UMINUS = 332                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -136,7 +137,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 156 "yacc_sql.y"
+#line 157 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -157,7 +158,7 @@ union YYSTYPE
   int                                        number;
   float                                      floats;
 
-#line 161 "yacc_sql.hpp"
+#line 162 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -439,7 +439,7 @@ RC RowRecordPageHandler::insert_partof_record(const char *data, RID *rid, const 
   char *record_data = get_record_data(index);
 
   int tmp = 0;//1表示头部，0表示其他
-  if(memcmp("", data, 1) != 0)
+  if(memcmp("", data, 1) != 0) //如果没数据，是不会存进去的，最多把指针存进去
     memcpy(record_data, data, page_header_->record_real_size);
   memcpy(record_data + page_header_->record_size, &tmp, sizeof(int));//记录是否为record的头部
   memcpy(record_data + page_header_->record_size+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
@@ -595,14 +595,16 @@ RC RowRecordPageHandler::get_record(const RID &rid, Record &record, RID &next_ri
     record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
     if(pagenum != 0 && slotnum != 0){
       Record record_tmp;
-      record_tmp.new_record(65536);
+      record_tmp.new_record(page_header_->record_real_size);
       memcpy(record_tmp.data(), get_record_data(rid.slot_num), page_header_->record_real_size);
       record_tmp.set_len(page_header_->record_real_size);
       record = record_tmp;
     }
   }else if(flag == 0){
-    if(record.len() >= MAX_RECORD_SIZE)
-      record.add_data(get_record_data(rid.slot_num), page_header_->record_real_size);
+    if(record.owner() && record.len() >= MAX_RECORD_SIZE){
+      if(memcmp("", get_record_data(rid.slot_num), 1) != 0)
+        record.add_data(get_record_data(rid.slot_num), page_header_->record_real_size);
+    }
     return RC::PART_OF_RECORD;
   }
   
@@ -952,6 +954,12 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, int offse
 
   if(record_size - offset > MAX_RECORD_SIZE){
     ret = insert_record(data + MAX_RECORD_SIZE, record_size, offset + MAX_RECORD_SIZE, &rid_next);
+    if(rid_next.page_num != 0 && rid_next.slot_num != 0){
+      rid->next = &rid_next;
+    }else{
+      rid->next = nullptr;
+    }
+
     if(!record_page_handler->is_full()){
       if(offset == 0) ret = record_page_handler->insert_headof_record(data, rid, rid_next);
       else ret = record_page_handler->insert_partof_record(data, rid, rid_next);
@@ -990,6 +998,14 @@ RC RecordFileHandler::recover_insert_record(const char *data, int record_size, c
 RC RecordFileHandler::delete_record(const RID *rid)
 {
   RC rc = RC::SUCCESS;
+
+  if(rid->next != nullptr){
+    rc = delete_record(rid->next);
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to delete sub-record");
+      return rc;
+    }
+  }
 
   unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
 

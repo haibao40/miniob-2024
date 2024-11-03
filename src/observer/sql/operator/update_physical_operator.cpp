@@ -71,8 +71,13 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     //   return rc;
     // }
     if(valuetmp.attr_type() != value_.attr_type() && value_.attr_type() != AttrType::NULLS){
-      LOG_WARN("type is not right");
-      return RC::NOT_EXIST;
+      auto cost = DataType::type_instance(value_.attr_type())->cast_cost(valuetmp.attr_type());
+      if(cost != INT32_MAX){
+        value_.cast_to(value_, valuetmp.attr_type(), value_);
+      }else{
+        LOG_WARN("type is not right");
+        return RC::NOT_EXIST;
+      }
     }
 
     //从1开始，是因为第0个位置是空值列表,这里把所有字段值保存起来

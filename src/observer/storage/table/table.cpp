@@ -468,9 +468,11 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
-  }else if(field->type() == AttrType::TEXT){
+  }else if(field->type() == AttrType::TEXTS){
     if(copy_len < data_len){
       copy_len = data_len;
+    }else if(copy_len > data_len){
+      copy_len = data_len + 1;
     }
   }
  
@@ -484,7 +486,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     LOG_WARN("filed is empty");
     return RC::EMPTY;
   }
-  if(field->len() < value.length() && field->type() != AttrType::TEXT) {
+  if(field->len() < value.length() && field->type() != AttrType::TEXTS) {
     LOG_WARN("传入value的存储长度，超过了字段元数据FieldMeta中定义的长度");
     return RC::INVALID_ARGUMENT;
   }
@@ -494,7 +496,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
-  }else if(field->type() == AttrType::TEXT){
+  }else if(field->type() == AttrType::TEXTS){
     if(copy_len < data_len){
       copy_len = data_len;
     }
