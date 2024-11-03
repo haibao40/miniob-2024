@@ -469,6 +469,9 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
       copy_len = data_len + 1;
     }
   }else if(field->type() == AttrType::TEXTS){
+    if(data_len > 65535){
+      return RC::INVALID_ARGUMENT; //超过最大长度
+    }
     if(copy_len < data_len){
       copy_len = data_len;
     }else if(copy_len > data_len){
