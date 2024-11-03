@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <map>
+#include <unordered_map>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"

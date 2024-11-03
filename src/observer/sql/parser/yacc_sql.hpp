@@ -137,7 +137,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 157 "yacc_sql.y"
+#line 159 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -151,8 +151,8 @@ union YYSTYPE
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::map<std::string, std::string> *       relation_list;
-  std::map<std::string, std::string> *       join_list;
+  std::unordered_map<std::string, std::string> *       relation_list;
+  std::unordered_map<std::string, std::string> *       join_list;
   std::vector<float> *                       float_list;
   char *                                     string;
   int                                        number;

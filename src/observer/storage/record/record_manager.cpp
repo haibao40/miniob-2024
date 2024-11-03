@@ -400,7 +400,7 @@ RC RowRecordPageHandler::insert_headof_record(const char *data, RID *rid, const 
 
   PageNum pagenum = *reinterpret_cast<PageNum*>(record_data + page_header_->record_size + sizeof(int));
   SlotNum slotnum = *reinterpret_cast<SlotNum*>(record_data + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
-  printf("flag:%d, page:%d, slot:%d\n", flag, pagenum, slotnum);
+  // printf("flag:%d, page:%d, slot:%d\n", flag, pagenum, slotnum);
 
   frame_->mark_dirty();
 
