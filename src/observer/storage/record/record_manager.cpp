@@ -24,7 +24,7 @@ using namespace common;
 
 static constexpr int PAGE_HEADER_SIZE = (sizeof(PageHeader));
 static constexpr int RID_POINTER      = (sizeof(int) + sizeof(PageNum) + sizeof(SlotNum));
-static constexpr int MAX_RECORD_SIZE  =  BP_PAGE_DATA_SIZE - PAGE_HEADER_SIZE - RID_POINTER - 37;
+static constexpr int MAX_RECORD_SIZE  =  BP_PAGE_DATA_SIZE - PAGE_HEADER_SIZE - RID_POINTER - 40;
 RecordPageHandler   *RecordPageHandler::create(StorageFormat format)
 {
   if (format == StorageFormat::ROW_FORMAT) {
@@ -440,6 +440,10 @@ RC RowRecordPageHandler::insert_partof_record(const char *data, RID *rid, const 
   // assert index < page_header_->record_capacity
   char *record_data = get_record_data(index);
 
+  PageNum pagenum = get_page_num();
+  SlotNum slotnum = index;
+  memset(record_data, 0, page_header_->record_real_size);
+
   int tmp = 0;//1表示头部，0表示其他
   if(memcmp("", data, 1) != 0) //如果没数据，是不会存进去的，最多把指针存进去
     memcpy(record_data, data, page_header_->record_real_size);
@@ -450,8 +454,8 @@ RC RowRecordPageHandler::insert_partof_record(const char *data, RID *rid, const 
   frame_->mark_dirty();
 
   if (rid) {
-    rid->page_num = get_page_num();
-    rid->slot_num = index;
+    rid->page_num = pagenum;
+    rid->slot_num = slotnum;
   }
 
   // LOG_TRACE("Insert record. rid page_num=%d, slot num=%d", get_page_num(), index);
@@ -891,6 +895,19 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, int offse
   RID rid_next;
   RC ret = RC::SUCCESS;
 
+  if(record_size - offset > MAX_RECORD_SIZE){
+    ret = insert_record(data + MAX_RECORD_SIZE, record_size, offset + MAX_RECORD_SIZE, &rid_next);
+    if(rid_next.page_num != 0 && rid_next.slot_num != 0){
+      rid->next = &rid_next;
+    }else{
+      rid->next = nullptr;
+    }
+
+    
+    if(offset == 0) return insert_record(data, MAX_RECORD_SIZE, rid, rid_next, 1);
+    else  ret = insert_record(data, MAX_RECORD_SIZE, rid, rid_next, 0);  
+  }
+
   unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
   bool                          page_found       = false;
   PageNum                       current_page_num = 0;
@@ -954,29 +971,9 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, int offse
     lock_.unlock();
   }
 
-  if(record_size - offset > MAX_RECORD_SIZE){
-    ret = insert_record(data + MAX_RECORD_SIZE, record_size, offset + MAX_RECORD_SIZE, &rid_next);
-    if(rid_next.page_num != 0 && rid_next.slot_num != 0){
-      rid->next = &rid_next;
-    }else{
-      rid->next = nullptr;
-    }
-
-    if(!record_page_handler->is_full()){
-      if(offset == 0) ret = record_page_handler->insert_headof_record(data, rid, rid_next);
-      else ret = record_page_handler->insert_partof_record(data, rid, rid_next);
-    }else{
-      if(offset == 0) ret = insert_record(data, MAX_RECORD_SIZE, rid, rid_next, 1);
-      else  ret = insert_record(data, MAX_RECORD_SIZE, rid, rid_next, 0);
-    }
-  }else{
-    if(offset == 0) return record_page_handler->insert_headof_record(data, rid, {0, 0});
-    else return record_page_handler->insert_partof_record(data, rid, {0, 0});
-  }
-
-  // if(ret == RC::RECORD_NOMEM){
-  //   return insert_record(data+offset, record_size, offset, rid);
-  // }
+  if(offset == 0) return record_page_handler->insert_headof_record(data, rid, {0, 0});
+  else return record_page_handler->insert_partof_record(data, rid, {0, 0});
+  
   // 找到空闲位置
   // return record_page_handler->insert_record(data, &rid);
   return ret;

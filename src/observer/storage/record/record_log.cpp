@@ -123,7 +123,7 @@ RC RecordLogHandler::insert_record(Frame *frame, const RID &rid, const char *rec
   if(memcmp("", record, 1) == 0){
     return RC::SUCCESS;
   }
-  memcpy(log_payload.data() + RecordLogHeader::SIZE, record, record_size_);
+  // memcpy(log_payload.data() + RecordLogHeader::SIZE, record, record_size_);
 
   LSN lsn = 0;
   RC  rc  = log_handler_->append(lsn, LogModule::Id::RECORD_MANAGER, std::move(log_payload));
