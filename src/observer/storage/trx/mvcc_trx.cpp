@@ -188,7 +188,34 @@ RC MvccTrx::delete_record(Table *table, Record &record)
 
 RC MvccTrx::update_record(Table *table, Record &record, vector<Value>& values)
 {
-  return table->update_record(record, values);
+  // RC rc = table->update_record(record, values);
+  RC rc = RC::SUCCESS;
+
+  Record new_record;
+
+  rc = table->make_record(values.size(), values.data(), new_record);
+  if(OB_FAIL(rc)) {  //make_record失败，可能是values的值不合法，比如某些字段不能为null
+    return rc;
+  }
+
+  //这里加一个步骤，查找唯一索引是否重复
+  rc = table->unique_index_contor(new_record.data());
+  if(rc !=RC::SUCCESS){
+    return rc ;
+  }
+
+  rc = insert_record(table, new_record);       //插入新的记录
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to insert record. table name:%s", table->table_meta().name());
+    return rc;
+  }
+
+  rc = delete_record(table, record);          //删除旧记录
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to delete old record when update record. table name:%s", table->table_meta().name());
+    return rc;
+  }
+  return rc;
 }
 
 RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
