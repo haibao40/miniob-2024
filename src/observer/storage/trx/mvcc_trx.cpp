@@ -206,15 +206,15 @@ RC MvccTrx::update_record(Table *table, Record &record, vector<Value>& values)
     return rc ;
   }
 
-  rc = insert_record(table, new_record);       //插入新的记录
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to insert record. table name:%s", table->table_meta().name());
-    return rc;
-  }
-
   rc = delete_record(table, record);          //删除旧记录
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to delete old record when update record. table name:%s", table->table_meta().name());
+    return rc;
+  }
+
+  rc = insert_record(table, new_record);       //插入新的记录
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to insert record. table name:%s", table->table_meta().name());
     return rc;
   }
   return rc;
