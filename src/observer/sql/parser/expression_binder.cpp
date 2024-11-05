@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
+
+#include "hierarchical_scope.h"
 #include "sql/expr/expression_iterator.h"
 #include "sql/stmt/stmt.h"
 #include "common/global_variable.h"
@@ -187,19 +189,37 @@ RC ExpressionBinder::bind_unbound_field_expression(
     //有别名取别名，无别名取表名
     field_expr_name += strcasecmp(table_name, table_alias) == 0 ? string(table_name) + "." : string(table_alias) + ".";
     table = context_.find_table(table_name);
-    if (nullptr == table) {
-      LOG_INFO("no such table in from list: %s", table_name);
-      return RC::SCHEMA_TABLE_NOT_EXIST;
+    if (nullptr == table) {  //by haijun: 为了适应关联子查询，这里找不到表，就尝试创建常量表达式
+      ValueExpr* runtime_value_expr = new ValueExpr(unbound_field_expr);
+      RC rc = GlobalVariable::curren_resolve_select_stmt->scope_->bind_scope_for_runtime_value_exprs(runtime_value_expr);
+      if(rc != RC::SUCCESS) {   //常量表达式绑定作用域失败，说明没有在上级作用域找到可以绑定的作用域，这个字段真的有问题
+        LOG_INFO("no such table in from list: %s", table_name);
+        return RC::SCHEMA_TABLE_NOT_EXIST;
+      }
+      else {  //成功为常量表达式绑定作用域，说明这真的是一个常量表达式
+        GlobalVariable::curren_resolve_subquery_expr->set_is_correlated();
+        bound_expressions.emplace_back(runtime_value_expr);
+        return RC::SUCCESS;
+      }
     }
   }
 
   if (0 == strcmp(field_name, "*")) {
     wildcard_fields(table, bound_expressions);
-  } else {
+  } else {  //TODO:万一字段使用了别名怎么办
     const FieldMeta *field_meta = table->table_meta().field(field_name);
-    if (nullptr == field_meta) {
-      LOG_INFO("no such field in table: %s.%s", table_name, field_name);
-      return RC::SCHEMA_FIELD_MISSING;
+    if (nullptr == field_meta) {  //by haijun: 为了适应关联子查询，这里找不到对应的字段，就尝试创建常量表达式
+      ValueExpr* runtime_value_expr = new ValueExpr(unbound_field_expr);
+      RC rc = GlobalVariable::curren_resolve_select_stmt->scope_->bind_scope_for_runtime_value_exprs(runtime_value_expr);
+      if(rc != RC::SUCCESS) {   //常量表达式绑定作用域失败，说明没有在上级作用域找到可以绑定的作用域，这个字段真的有问题
+        LOG_INFO("no such table in from list: %s", table_name);
+        return RC::SCHEMA_TABLE_NOT_EXIST;
+      }
+      else {  //成功为常量表达式绑定作用域，说明这真的是一个常量表达式
+        GlobalVariable::curren_resolve_subquery_expr->set_is_correlated();  //将当前这个子查询设置为相关子查询
+        bound_expressions.emplace_back(runtime_value_expr);
+        return RC::SUCCESS;
+      }
     }
 
     Field      field(table, field_meta);
@@ -540,8 +560,12 @@ RC ExpressionBinder::bind_subquery_expression(
   ParsedSqlNode* parsed_sql_node = unbound_sub_query_expr->parsed_sql_node();  // 子查询对应的sql_node
   Stmt          *stmt     = nullptr;
   // 对子查询进行resolve TODO:如果是相关子查询，这里需要适当的调整
+  SubqueryExpr *subquery_expr = new SubqueryExpr();
+  SubqueryExpr *pre_resolve_subquery_expr = GlobalVariable::curren_resolve_subquery_expr;
+  GlobalVariable::curren_resolve_subquery_expr = subquery_expr;           //在全局变量中记录当前正在处理的子查询
   RC rc = Stmt::create_stmt(GlobalVariable::db, *parsed_sql_node, stmt);  // 对子查询进行resolve
-  SubqueryExpr *subquery_expr = new SubqueryExpr((SelectStmt*) stmt);
+  subquery_expr->set_select_stmt((SelectStmt*) stmt);
+  GlobalVariable::curren_resolve_subquery_expr = pre_resolve_subquery_expr;  //回溯全局变量到之前的值
   if (rc != RC::SUCCESS && rc != RC::UNIMPLEMENTED) {
     LOG_WARN("failed to create stmt for sub query . rc=%d:%s", rc, strrc(rc));
     return rc;

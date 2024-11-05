@@ -145,6 +145,12 @@ public:
   static RC create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       const ConditionSqlNode &condition, FilterUnit *&filter_unit);
 
+  /***
+   * @brief 将conditionsqlnode中的relAttrSqlNode替换为UNboundFieldExpr，让它走expression的bind流程，
+   *        因为在那里实现了对关联子查询中运行时常量的处理逻辑
+   */
+  static void replace_relAttrSqlNode_to_expr(ConditionSqlNode &condition);
+
 private:
   std::vector<FilterUnit *> filter_units_;  // 默认当前都是AND关系
 };
