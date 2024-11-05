@@ -38,6 +38,10 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
 
+    if(conditions[i].conjunction_with_or == true) {
+      tmp_stmt->conjunction_with_or = true;
+    }
+
     rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;

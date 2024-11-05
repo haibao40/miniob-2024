@@ -75,6 +75,7 @@ enum CompOp
  */
 struct ConditionSqlNode
 {
+  bool           conjunction_with_or = false;  ///表示多个条件之间是否使用or进行连接，虽然写在这个位置不太合适，但是也没几个题目了，就这样吧
   int            left_is_expr=0;
   int            left_is_attr=0;              ///< TRUE if left-hand side is an attribute
                                  ///< 1时，操作符左边是属性名，0时，是属性值

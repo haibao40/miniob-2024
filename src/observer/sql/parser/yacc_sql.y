@@ -118,6 +118,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -1045,6 +1046,12 @@ condition_list:
     }
     | condition AND condition_list {
       $$ = $3;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | condition OR condition_list {
+      $$ = $3;
+      $1->conjunction_with_or = true;
       $$->emplace_back(*$1);
       delete $1;
     }

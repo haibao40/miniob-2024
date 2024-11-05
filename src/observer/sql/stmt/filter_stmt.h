@@ -135,6 +135,7 @@ public:
   virtual ~FilterStmt();
 
 public:
+  bool conjunction_with_or = false;  //表示这些条件是否使用or进行组合
   const std::vector<FilterUnit *> &filter_units() const { return filter_units_; }
   std::vector<FilterUnit *> filter_units() {return filter_units_;}
 
