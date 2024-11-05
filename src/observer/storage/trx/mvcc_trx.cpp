@@ -17,6 +17,13 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 #include "storage/trx/mvcc_trx_log.h"
 #include "common/lang/algorithm.h"
+#include "storage/table/table_meta.h"
+#include "common/types.h"
+#include "common/lang/span.h"
+#include "common/lang/functional.h"
+#include "storage/index/index.h"
+
+// class Index;
 
 MvccTrxKit::~MvccTrxKit()
 {
@@ -177,6 +184,15 @@ RC MvccTrx::delete_record(Table *table, Record &record)
     return delete_result;
   }
 
+  //rc = table->delete_record(record);
+  for (Index *index : table->indexes()) {
+    rc = index->delete_entry(record.data(), &record.rid());
+    if(rc != RC::SUCCESS){
+      
+    }
+  }
+
+
   rc = log_handler_.delete_record(trx_id_, table, record.rid());
   ASSERT(rc == RC::SUCCESS, "failed to append delete record log. trx id=%d, table id=%d, rid=%s, record len=%d, rc=%s",
       trx_id_, table->table_id(), record.rid().to_string().c_str(), record.len(), strrc(rc));
@@ -200,16 +216,16 @@ RC MvccTrx::update_record(Table *table, Record &record, vector<Value>& values)
     return rc;
   }
 
-  //这里加一个步骤，查找唯一索引是否重复
-  rc = table->unique_index_contor(new_record.data());
-  if(rc !=RC::SUCCESS){
-    return rc ;
-  }
-
   rc = delete_record(table, record);          //删除旧记录
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to delete old record when update record. table name:%s", table->table_meta().name());
     return rc;
+  }
+
+  //这里加一个步骤，查找唯一索引是否重复
+  rc = table->unique_index_contor(new_record.data());
+  if(rc !=RC::SUCCESS){
+    return rc ;
   }
 
   rc = insert_record(table, new_record);       //插入新的记录

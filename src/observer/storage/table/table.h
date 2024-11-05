@@ -116,6 +116,7 @@ public:
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
   const char *name() const;
+  std::vector<Index *> indexes() { return indexes_; }
 
   Db *db() const { return db_; }
 
