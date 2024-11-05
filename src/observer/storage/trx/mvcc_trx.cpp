@@ -193,6 +193,8 @@ RC MvccTrx::update_record(Table *table, Record &record, vector<Value>& values)
 
   Record new_record;
 
+  values.erase(values.begin(), values.begin()+2);
+
   rc = table->make_record(values.size(), values.data(), new_record);
   if(OB_FAIL(rc)) {  //make_record失败，可能是values的值不合法，比如某些字段不能为null
     return rc;
