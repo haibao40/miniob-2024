@@ -190,10 +190,13 @@ RC ExpressionBinder::bind_unbound_field_expression(
     field_expr_name += strcasecmp(table_name, table_alias) == 0 ? string(table_name) + "." : string(table_alias) + ".";
     table = context_.find_table(table_name);
     if (nullptr == table) {  //by haijun: 为了适应关联子查询，这里找不到表，就尝试创建常量表达式
+      RC rc = RC::SCHEMA_TABLE_NOT_EXIST;
       ValueExpr* runtime_value_expr = new ValueExpr(unbound_field_expr);
-      RC rc = GlobalVariable::curren_resolve_select_stmt->scope_->bind_scope_for_runtime_value_exprs(runtime_value_expr);
+      if(GlobalVariable::curren_resolve_subquery_expr != nullptr) {  //说明是子查询的情况
+        rc = GlobalVariable::curren_resolve_select_stmt->scope_->bind_scope_for_runtime_value_exprs(runtime_value_expr);
+      }
       if(rc != RC::SUCCESS) {   //常量表达式绑定作用域失败，说明没有在上级作用域找到可以绑定的作用域，这个字段真的有问题
-        LOG_INFO("no such table in from list: %s", table_name);
+        LOG_INFO("no such table in from list or no such field: %s", table_name);
         return RC::SCHEMA_TABLE_NOT_EXIST;
       }
       else {  //成功为常量表达式绑定作用域，说明这真的是一个常量表达式
@@ -209,10 +212,13 @@ RC ExpressionBinder::bind_unbound_field_expression(
   } else {  //TODO:万一字段使用了别名怎么办
     const FieldMeta *field_meta = table->table_meta().field(field_name);
     if (nullptr == field_meta) {  //by haijun: 为了适应关联子查询，这里找不到对应的字段，就尝试创建常量表达式
+      RC rc = RC::SCHEMA_TABLE_NOT_EXIST;
       ValueExpr* runtime_value_expr = new ValueExpr(unbound_field_expr);
-      RC rc = GlobalVariable::curren_resolve_select_stmt->scope_->bind_scope_for_runtime_value_exprs(runtime_value_expr);
+      if(GlobalVariable::curren_resolve_subquery_expr != nullptr) {  //说明是子查询的情况
+        rc = GlobalVariable::curren_resolve_select_stmt->scope_->bind_scope_for_runtime_value_exprs(runtime_value_expr);
+      }
       if(rc != RC::SUCCESS) {   //常量表达式绑定作用域失败，说明没有在上级作用域找到可以绑定的作用域，这个字段真的有问题
-        LOG_INFO("no such table in from list: %s", table_name);
+        LOG_INFO("no such table in from list or no such field: %s", table_name);
         return RC::SCHEMA_TABLE_NOT_EXIST;
       }
       else {  //成功为常量表达式绑定作用域，说明这真的是一个常量表达式
