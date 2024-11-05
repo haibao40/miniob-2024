@@ -1382,5 +1382,7 @@ RC SubqueryExpr::get_value_list_in_correlated_query(vector<Value>& value_list) c
 
 void SubqueryExpr::bind_tuple_to_scope(const Tuple& tuple) const
 {
-  select_stmt_->parent_->scope_->tuple = const_cast<Tuple *> (&tuple);
+  if(select_stmt_->parent_ != nullptr) {
+    select_stmt_->parent_->scope_->tuple = const_cast<Tuple *> (&tuple);
+  }
 }
