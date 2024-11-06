@@ -43,6 +43,18 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   return expr;
 }
 
+ArithmeticExpr *create_arithmetic_expression_with_alias(ArithmeticExpr::Type type,
+                                             Expression *left,
+                                             Expression *right,
+                                             char* alias)
+{
+  Value value(0);
+  ValueExpr *zero = new ValueExpr(value);
+  ArithmeticExpr *expr = type == ArithmeticExpr::Type::NEGATIVE ? new ArithmeticExpr(ArithmeticExpr::Type::SUB, zero, left) : new ArithmeticExpr(type, left, right);
+  expr->set_name(alias);
+  return expr;
+}
+
 VectorFunctionExpr *create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION type,
                                              Expression *left,
                                              Expression *right,
@@ -700,14 +712,38 @@ expression:
     expression '+' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
     }
+    | expression '+' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $4);
+    }
+    | expression '+' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $5);
+    }
     | expression '-' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, $3, sql_string, &@$);
+    }
+    | expression '-' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $4);
+    }
+    | expression '-' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $5);
     }
     | expression '*' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1, $3, sql_string, &@$);
     }
+    | expression '*' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $4);
+    }
+    | expression '*' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $5);
+    }
     | expression '/' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1, $3, sql_string, &@$);
+    }
+    | expression '/' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $4);
+    }
+    | expression '/' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $5);
     }
     | LBRACE expression RBRACE {
       $$ = $2;
