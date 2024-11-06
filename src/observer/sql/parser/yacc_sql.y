@@ -65,6 +65,15 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   return expr;
 }
 
+UnboundAggregateExpr *create_aggregate_expression_with_alias(const char *aggregate_name,
+                                           Expression *child,
+                                           char *alias)
+{
+  UnboundAggregateExpr *expr = new UnboundAggregateExpr(aggregate_name, child);
+  expr->set_name(alias);
+  return expr;
+}
+
 std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 
 
@@ -754,32 +763,92 @@ expression:
     | SUM LBRACE expression RBRACE{
       $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
     }
+    | SUM LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("SUM", $3, $5);
+    }
+    | SUM LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("SUM", $3, $6);
+    }
     | MAX LBRACE expression RBRACE{
       $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
+    }
+    | MAX LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MAX", $3, $5);
+    }
+    | MAX LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MAX", $3, $6);
     }
     | MIN LBRACE expression RBRACE{
       $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
     }
+    | MIN LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MIN", $3, $5);
+    }
+    | MIN LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MIN", $3, $6);
+    }
     | AVG LBRACE expression RBRACE{
       $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
+    }
+    | AVG LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("AVG", $3, $5);
+    }
+    | AVG LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("AVG", $3, $6);
     }
     | COUNT LBRACE expression RBRACE{
       $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
     }
+    | COUNT LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", $3, $5);
+    }
+    | COUNT LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", $3, $6);
+    }
     | SUM LBRACE expression_list RBRACE {
       $$ = create_aggregate_expression("SUM", nullptr, sql_string, &@$);
+    }
+    | SUM LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("SUM", nullptr, $5);
+    }
+    | SUM LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("SUM", nullptr, $6);
     }
     | MAX LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("MAX", nullptr, sql_string, &@$);
     }
+    | MAX LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MAX", nullptr, $5);
+    }
+    | MAX LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MAX", nullptr, $6);
+    }
     | MIN LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("MIN", nullptr, sql_string, &@$);
+    }
+    | MIN LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MIN", nullptr, $5);
+    }
+    | MIN LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MIN", nullptr, $6);
     }
     | AVG LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("AVG", nullptr, sql_string, &@$);
     }
+    | AVG LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("AVG", nullptr, $5);
+    }
+    | AVG LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("AVG", nullptr, $6);
+    }
     | COUNT LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
+    }
+    | COUNT LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", nullptr, $5);
+    }
+    | COUNT LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", nullptr, $6);
     }
     | LBRACE select_stmt RBRACE {
       printf("解析子查询");
