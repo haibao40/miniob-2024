@@ -119,7 +119,11 @@ RC RecordLogHandler::insert_record(Frame *frame, const RID &rid, const char *rec
   header->page_num        = rid.page_num;
   header->slot_num        = rid.slot_num;
   header->storage_format  = static_cast<int>(storage_format_);
-  memcpy(log_payload.data() + RecordLogHeader::SIZE, record, record_size_);
+  
+  if(memcmp("", record, 1) == 0){
+    return RC::SUCCESS;
+  }
+  // memcpy(log_payload.data() + RecordLogHeader::SIZE, record, record_size_);
 
   LSN lsn = 0;
   RC  rc  = log_handler_->append(lsn, LogModule::Id::RECORD_MANAGER, std::move(log_payload));
@@ -128,6 +132,56 @@ RC RecordLogHandler::insert_record(Frame *frame, const RID &rid, const char *rec
   }
   return rc;
 }
+
+// RC RecordLogHandler::insert_headof_record(Frame *frame, const RID &rid, const char *record, const RID next_rid)
+// {
+//   const int        log_payload_size = RecordLogHeader::SIZE + record_size_;
+//   vector<char>     log_payload(log_payload_size);
+//   RecordLogHeader *header = reinterpret_cast<RecordLogHeader *>(log_payload.data());
+//   header->buffer_pool_id  = buffer_pool_id_;
+//   header->operation_type  = RecordOperation(RecordOperation::Type::INSERT).type_id();
+//   header->page_num        = rid.page_num;
+//   header->slot_num        = rid.slot_num;
+//   header->storage_format  = static_cast<int>(storage_format_);
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE, record, record_size_);
+
+//   int tmp = 1;
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE + record_size_, &tmp, sizeof(int));//记录是否为record的头部
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE + record_size_+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE + record_size_+sizeof(int)+sizeof(PageNum), &next_rid.slot_num, sizeof(SlotNum));
+
+//   LSN lsn = 0;
+//   RC  rc  = log_handler_->append(lsn, LogModule::Id::RECORD_MANAGER, std::move(log_payload));
+//   if (OB_SUCC(rc) && lsn > 0) {
+//     frame->set_lsn(lsn);
+//   }
+//   return rc;
+// }
+
+// RC RecordLogHandler::insert_partof_record(Frame *frame, const RID &rid, const char *record, const RID next_rid)
+// {
+//   const int        log_payload_size = RecordLogHeader::SIZE + record_size_;
+//   vector<char>     log_payload(log_payload_size);
+//   RecordLogHeader *header = reinterpret_cast<RecordLogHeader *>(log_payload.data());
+//   header->buffer_pool_id  = buffer_pool_id_;
+//   header->operation_type  = RecordOperation(RecordOperation::Type::INSERT).type_id();
+//   header->page_num        = rid.page_num;
+//   header->slot_num        = rid.slot_num;
+//   header->storage_format  = static_cast<int>(storage_format_);
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE, record, record_size_);
+
+//   int tmp = 0;
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE + record_size_, &tmp, sizeof(int));//记录是否为record的头部
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE + record_size_+sizeof(int), &next_rid.page_num, sizeof(PageNum));//记录没有下一段
+//   memcpy(log_payload.data() + RecordLogHeader::SIZE + record_size_+sizeof(int)+sizeof(PageNum), &next_rid.slot_num, sizeof(SlotNum));
+
+//   LSN lsn = 0;
+//   RC  rc  = log_handler_->append(lsn, LogModule::Id::RECORD_MANAGER, std::move(log_payload));
+//   if (OB_SUCC(rc) && lsn > 0) {
+//     frame->set_lsn(lsn);
+//   }
+//   return rc;
+// }
 
 RC RecordLogHandler::update_record(Frame *frame, const RID &rid, const char *record)
 {
@@ -275,7 +329,7 @@ RC RecordLogReplayer::replay_insert(DiskBufferPool &buffer_pool, const RecordLog
 
   const char *record = log_header.data;
   RID         rid(log_header.page_num, log_header.slot_num);
-  rc = record_page_handler->insert_record(record, &rid);
+  rc = record_page_handler->insert_record(record, &rid, {0, 0});
   if (OB_FAIL(rc)) {
     LOG_WARN("fail to recover insert record. page num=%d, slot num=%d, rc=%s", 
              log_header.page_num, log_header.slot_num, strrc(rc));

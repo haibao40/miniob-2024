@@ -105,6 +105,7 @@ public:
    * @param record 返回的下一个记录
    */
   RC next(Record &record);
+  RC next(Record &Record, RID &next_rid);
 
   /**
    * 该迭代器是否有效
@@ -180,6 +181,9 @@ public:
    * @param rid  如果插入成功，通过这个参数返回插入的位置
    */
   virtual RC insert_record(const char *data, RID *rid) { return RC::UNIMPLEMENTED; }
+  virtual RC insert_record(const char *data, RID *rid, const RID next_rid) { return RC::UNIMPLEMENTED; }
+  virtual RC insert_headof_record(const char *data, RID *rid, const RID next_rid) { return RC::UNIMPLEMENTED; }
+  virtual RC insert_partof_record(const char *data, RID *rid, const RID next_rid) { return RC::UNIMPLEMENTED; }
 
   /**
    * @brief 数据库恢复时，在指定位置插入数据
@@ -209,6 +213,7 @@ public:
    * @param record 获取到的记录结果
    */
   virtual RC get_record(const RID &rid, Record &record) { return RC::UNIMPLEMENTED; }
+  virtual RC get_record(const RID &rid, Record &record, RID &next_rid) { return RC::UNIMPLEMENTED; }
 
   /**
    * @brief 获取整个页面中指定列的所有记录。
@@ -237,10 +242,11 @@ protected:
    */
   void fix_record_capacity()
   {
-    int32_t last_record_offset = page_header_->data_offset + page_header_->record_capacity * page_header_->record_size;
+    // RID_POINTER = 12, 但是这里不能用RID_POINTER,所以直接使用常量了
+    int32_t last_record_offset = page_header_->data_offset + page_header_->record_capacity * (page_header_->record_size + 12);
     while (last_record_offset > BP_PAGE_DATA_SIZE) {
       page_header_->record_capacity -= 1;
-      last_record_offset -= page_header_->record_size;
+      last_record_offset -= (page_header_->record_size + 12);
     }
   }
 
@@ -251,7 +257,7 @@ protected:
    */
   char *get_record_data(SlotNum slot_num)
   {
-    return frame_->data() + page_header_->data_offset + (page_header_->record_size * slot_num);
+    return frame_->data() + page_header_->data_offset + ((page_header_->record_size + 12) * slot_num);
   }
 
 protected:
@@ -283,6 +289,9 @@ public:
   RowRecordPageHandler() : RecordPageHandler(StorageFormat::ROW_FORMAT) {}
 
   virtual RC insert_record(const char *data, RID *rid) override;
+  virtual RC insert_record(const char *data, RID *rid, const RID next_rid) override;
+  virtual RC insert_headof_record(const char *data, RID *rid, const RID next_rid) override;
+  virtual RC insert_partof_record(const char *data, RID *rid, const RID next_rid) override;
 
   virtual RC recover_insert_record(const char *data, const RID &rid) override;
 
@@ -297,6 +306,7 @@ public:
    * @param record 返回指定的数据。这里不会将数据复制出来，而是使用指针，所以调用者必须保证数据使用期间受到保护
    */
   virtual RC get_record(const RID &rid, Record &record) override;
+  virtual RC get_record(const RID &rid, Record &record, RID &next_rid) override;
 };
 
 /**
@@ -388,6 +398,10 @@ public:
    */
   RC insert_record(const char *data, int record_size, RID *rid);
 
+  RC insert_record(const char *data, int record_size, int &offset,std::vector<RID>& rids);
+  RC insert_record(const char *data, int record_size, int offset, RID *rid);
+  RC insert_record(const char *data, int record_size, RID *rid, const RID rid_next, int flag);
+
   /**
    * @brief 数据库恢复时，在指定文件指定位置插入数据
    *
@@ -458,11 +472,13 @@ private:
    * @brief 获取该文件中的下一条记录
    */
   RC fetch_next_record();
+  RC my_fetch_next_record();
 
   /**
    * @brief 获取一个页面内的下一条记录
    */
   RC fetch_next_record_in_page();
+  RC fetch_next_record_in_page(RID &next_rid);
 
 private:
   // TODO 对于一个纯粹的record遍历器来说，不应该关心表和事务

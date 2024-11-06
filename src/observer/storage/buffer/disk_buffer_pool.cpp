@@ -372,6 +372,7 @@ RC DiskBufferPool::allocate_page(Frame **frame)
         rc = log_handler_.allocate_page(i, lsn);
         if (OB_FAIL(rc)) {
           LOG_ERROR("Failed to log allocate page %d, rc=%s", i, strrc(rc));
+          return RC::PAGE_NOT_OPEN;
           // 忽略了错误
         }
 

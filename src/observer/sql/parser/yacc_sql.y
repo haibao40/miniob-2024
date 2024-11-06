@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <map>
+#include <unordered_map>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -109,6 +111,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         STRING_T
         FLOAT_T
         DATE_T
+        TEXT_T
         VECTOR_T
         HELP
         EXIT
@@ -423,7 +426,11 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = 4;
+      if($$->type == AttrType::TEXTS){
+        $$->length = 65535;
+      }else{
+        $$->length = 4;
+      }
       $3 == 1 ? $$->not_null = true : $$->not_null = false;
       free($1);
     }
@@ -442,6 +449,7 @@ type:
     | STRING_T { $$ = static_cast<int>(AttrType::CHARS); }
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
     | DATE_T  { $$ = static_cast<int>(AttrType::DATES); }
+    | TEXT_T   { $$ = static_cast<int>(AttrType::TEXTS); }
     | VECTOR_T { $$ = static_cast<int>(AttrType::VECTORS); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/

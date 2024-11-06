@@ -34,6 +34,7 @@ public:
   friend class DateType;
   friend class BooleanType;
   friend class CharType;
+  friend class TextType;
   friend class VectorType;
   friend class NullType;
 
@@ -41,7 +42,9 @@ public:
 
   ~Value() { reset(); }
 
-  Value(AttrType attr_type, char *data, int length = 4) : attr_type_(attr_type) { this->set_data(data, length); }
+  Value(AttrType attr_type, char *data, int length = 4) : attr_type_(attr_type) {
+    this->set_data(data, length); 
+  }
 
   explicit Value(int val);
   explicit Value(float val);
@@ -102,7 +105,8 @@ public:
    */
   void set_null();
 
-  void int2float(){
+  void int2float() //顾名思义，把int类型的value转化为float，但是值不能变
+  {
     int tmp = this->value_.int_value_;
     float ftmp = (float)tmp;
     this->set_float(ftmp);
@@ -151,7 +155,9 @@ private:
   void set_int(int val);
   void set_float(float val);
   void set_string(const char *s, int len = 0);
+  void set_text(const char *s, int len = 0);
   void set_string_from_other(const Value &other);
+  void set_text_from_other(const Value &other);
   /***
    *@brief 设置日期，将日期字符串转换为一个8位的整数，从高位到低位，分别是，4位年份，2位月份，2位日期
    */

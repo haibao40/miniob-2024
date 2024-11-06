@@ -91,6 +91,8 @@ public:
   RC delete_record(const RID &rid);
   RC get_record(const RID &rid, Record &record);
 
+  RC insert_record(Record &record, int record_size);
+
   RC recover_insert_record(Record &record);
 
   // TODO refactor
@@ -115,6 +117,7 @@ public:
 
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
+  const int record_num() const { return record_num_; }
   const char *name() const;
   std::vector<Index *> indexes() { return indexes_; }
 
@@ -128,6 +131,8 @@ private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
   RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field);
+
+  RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field, int offset);
   /***
    * @brief 获取空值列表
    * @param value_num 数据的个数
@@ -147,6 +152,7 @@ private:
   Db                *db_ = nullptr;
   string             base_dir_;
   TableMeta          table_meta_;
+  int                record_num_       = 0;        /// 表中的记录数，有用
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;

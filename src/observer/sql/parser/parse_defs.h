@@ -18,7 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 #include <memory>
 #include <map>
-#include<unordered_map>
+#include <unordered_map>
+
 #include "common/value.h"
 
 class Expression;

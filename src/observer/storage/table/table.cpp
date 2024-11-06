@@ -201,7 +201,6 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
        field_metas_point->push_back(&((*field_metas)[i]));
     }
 
-
     BplusTreeIndex *index      = new BplusTreeIndex();
     string          index_file = table_index_file(base_dir, name(), index_meta->name());
     //Table *table, const char *file_name, const IndexMeta &index_meta,
@@ -223,7 +222,15 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
 
 RC Table::update_record(Record &old_record, vector<Value> &new_values){
   RC rc = RC::SUCCESS;
+  // LOG_DEBUG("type:%d, value:%s, field_name:%s", value.attr_type(), value.to_string().c_str(), field_name);
+
+
   Record new_record;
+  // int   record_size = table_meta_.record_size();
+  // char *record_data = (char *)malloc(record_size);
+  // const int normal_field_start_index = table_meta_.sys_field_num();
+  // const FieldMeta *field = table_meta_.field(normal_field_start_index);
+  // int offset = field->offset();
 
   rc = make_record(new_values.size(), new_values.data(), new_record);
   if(OB_FAIL(rc)) {  //make_record失败，可能是values的值不合法，比如某些字段不能为null
@@ -452,6 +459,15 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
   const size_t data_len = value.length();
   if (field->type() == AttrType::CHARS) {
     if (copy_len > data_len) {
+      copy_len = data_len + 1;
+    }
+  }else if(field->type() == AttrType::TEXTS){
+    if(data_len > 65535){
+      return RC::INVALID_ARGUMENT; //超过最大长度
+    }
+    if(copy_len < data_len){
+      copy_len = data_len;
+    }else if(copy_len > data_len){
       copy_len = data_len + 1;
     }
   }
