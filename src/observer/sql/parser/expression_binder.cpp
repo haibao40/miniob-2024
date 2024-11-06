@@ -56,6 +56,19 @@ static void wildcard_fields(Table *table, vector<unique_ptr<Expression>> &expres
   }
 }
 
+static void wildcard_fields_with_table_alias(Table *table, std::string table_alias, vector<unique_ptr<Expression>> &expressions)
+{
+  const TableMeta &table_meta = table->table_meta();
+  const int        field_num  = table_meta.field_num();
+  //by haijun:原本只是需要跳过sys_field, 现在由于添加了空值列表null_value_list,所以还需要跳过空值列表
+  for (int i = table_meta.sys_field_num() + table_meta.system_not_visible_field_number() ; i < field_num; i++) {
+    Field      field(table, table_meta.field(i));
+    FieldExpr *field_expr = new FieldExpr(field);
+    field_expr->set_name(table_alias+"."+ field.field_name());
+    expressions.emplace_back(field_expr);
+  }
+}
+
 RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &bound_expressions)
 {
   if (nullptr == expr) {
@@ -140,6 +153,7 @@ RC ExpressionBinder::bind_star_expression(
   auto star_expr = static_cast<StarExpr *>(expr.get());
 
   vector<Table *> tables_to_wildcard;
+  bool use_table_alias = false;
 
   const char *table_name = star_expr->table_name();
   if (!is_blank(table_name) && 0 != strcmp(table_name, "*")) {
@@ -147,6 +161,9 @@ RC ExpressionBinder::bind_star_expression(
     if (nullptr == table) {
       LOG_INFO("no such table in from list: %s", table_name);
       return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+    if(strcmp(table_name, table->name()) != 0) { //查到的真实的表的表名，和表达式中使用的表名不一致，说明表达式中使用的是别名
+      use_table_alias = true;
     }
 
     tables_to_wildcard.push_back(table);
@@ -156,7 +173,12 @@ RC ExpressionBinder::bind_star_expression(
   }
 
   for (Table *table : tables_to_wildcard) {
-    wildcard_fields(table, bound_expressions);
+    if(use_table_alias == false) {
+      wildcard_fields(table, bound_expressions);
+    }
+    else {
+      wildcard_fields_with_table_alias(table, table_name,  bound_expressions);  //这里给表达式设置名字的时候，会使用别名
+    }
   }
 
   return RC::SUCCESS;

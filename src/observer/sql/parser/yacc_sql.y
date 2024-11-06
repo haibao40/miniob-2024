@@ -721,6 +721,9 @@ expression:
     | '*' {
       $$ = new StarExpr();
     }
+    | ID DOT '*' {
+      $$ = new StarExpr($1);
+    }
     | L2_DISTANCE LBRACE expression COMMA expression RBRACE       /* l2_distance(vector A, vector B) */
     {
       $$ = create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION::L2_DISTANCE, $3, $5, sql_string, &@$);
