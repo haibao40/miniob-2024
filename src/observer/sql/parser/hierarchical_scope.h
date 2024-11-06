@@ -82,14 +82,8 @@ public:
           return RC::SUCCESS;
         }
       }
-      //case3:表名是空，但是字段的真名不是空，使用真名，由于真名也有可能是别名，所以要先在别名中去查找，然后在表中挨个去查找
+      //case3:表名是空，但是字段的真名不是空，使用真名，在表中挨个去查找
       else if(field_info.table_name.empty() &&!field_info.field_name.empty()) {
-        if(search_scope->name2field_info.find(field_info.field_name) != search_scope->name2field_info.end()) { //先在别名中去找
-          FieldInfo real_field_info = search_scope->name2field_info[field_info.field_name];
-          value_expr->set_field_info(real_field_info);
-          value_expr->set_hierarchical_scope(search_scope);
-          return RC::SUCCESS;
-        }
         for(auto pair : search_scope->name2table) {   //然后在表中去找
           Table* table = pair.second;
           const FieldMeta* field_meta = table->table_meta().field(field_info.field_name.c_str());
