@@ -54,7 +54,8 @@ int page_record_capacity(int page_size, int record_size, int fixed_size)
   // (record_capacity * record_size) + record_capacity/8 + 1 <= (page_size - fix_size)
   // ==> record_capacity = ((page_size - fix_size) - 1) / (record_size + 0.125)
   // return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125));
-  return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125 + RID_POINTER));
+  // return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125 + RID_POINTER));
+  return (int)((page_size - PAGE_HEADER_SIZE - fixed_size - 1) / (record_size + 0.125));
 }
 
 /**
@@ -558,14 +559,6 @@ RC RowRecordPageHandler::get_record(const RID &rid, Record &record)
     return RC::RECORD_NOT_EXIST;
   }
 
-  int flag = *reinterpret_cast<int*>(get_record_data(rid.slot_num) + page_header_->record_size);
-  if(flag == 0)
-    return RC::PART_OF_RECORD;
-
-  // PageNum pagenum = *reinterpret_cast<PageNum*>(get_record_data(rid.slot_num) + page_header_->record_size + sizeof(int));
-  // SlotNum slotnum = *reinterpret_cast<SlotNum*>(get_record_data(rid.slot_num) + page_header_->record_size + sizeof(int) + sizeof(SlotNum));
-  // int true_size = page_header_->record_real_size;
-
   record.set_rid(rid);
   // record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
   record.set_data(get_record_data(rid.slot_num), page_header_->record_real_size);
@@ -815,7 +808,7 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
   }
 
   // 找到空闲位置
-  return record_page_handler->insert_headof_record(data, rid, {0,0});
+  return record_page_handler->insert_record(data, rid);
 }
 
 RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid, const RID rid_next, int flag)
@@ -998,13 +991,13 @@ RC RecordFileHandler::delete_record(const RID *rid)
 {
   RC rc = RC::SUCCESS;
 
-  if(rid->next != nullptr){
-    rc = delete_record(rid->next);
-    if (OB_FAIL(rc)) {
-      LOG_ERROR("Failed to delete sub-record");
-      return rc;
-    }
-  }
+  // if(rid->next != nullptr){
+  //   rc = delete_record(rid->next);
+  //   if (OB_FAIL(rc)) {
+  //     LOG_ERROR("Failed to delete sub-record");
+  //     return rc;
+  //   }
+  // }
 
   unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
 
@@ -1041,32 +1034,32 @@ RC RecordFileHandler::get_record(const RID &rid, Record &record)
   }
 
   Record inplace_record;
-  RID next_rid;
-  RID after_rid;
-  // rc = page_handler->get_record(rid, inplace_record);
-  rc = page_handler->get_record(rid, inplace_record, next_rid);
+  // RID next_rid;
+  // RID after_rid;
+  rc = page_handler->get_record(rid, inplace_record);
+  // rc = page_handler->get_record(rid, inplace_record, next_rid);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get record from record page handle. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
     return rc;
   }
 
   //当还有下一段记录时，一直拿记录
-  if(rc == RC::SUCCESS){
-    while(next_rid.page_num != 0 && next_rid.slot_num != 0){
-      // printf("next_page_num:%d, next_slot_num:%d\n", next_rid.page_num, next_rid.slot_num);
-      rc = page_handler->init(*disk_buffer_pool_, *log_handler_, next_rid.page_num, ReadWriteMode::READ_WRITE);
-      if (OB_FAIL(rc)) {
-        LOG_ERROR("Failed to init record page handler.page number=%d", next_rid.page_num);
-        return rc;
-      }
-      rc = page_handler->get_record(next_rid, inplace_record, after_rid);
-      if (OB_FAIL(rc)) {
-        LOG_WARN("failed to get record from record page handle. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
-        return rc;
-      }
-      next_rid = after_rid;
-    }
-  }
+  // if(rc == RC::SUCCESS){
+  //   while(next_rid.page_num != 0 && next_rid.slot_num != 0){
+  //     // printf("next_page_num:%d, next_slot_num:%d\n", next_rid.page_num, next_rid.slot_num);
+  //     rc = page_handler->init(*disk_buffer_pool_, *log_handler_, next_rid.page_num, ReadWriteMode::READ_WRITE);
+  //     if (OB_FAIL(rc)) {
+  //       LOG_ERROR("Failed to init record page handler.page number=%d", next_rid.page_num);
+  //       return rc;
+  //     }
+  //     rc = page_handler->get_record(next_rid, inplace_record, after_rid);
+  //     if (OB_FAIL(rc)) {
+  //       LOG_WARN("failed to get record from record page handle. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
+  //       return rc;
+  //     }
+  //     next_rid = after_rid;
+  //   }
+  // }
 
   record.copy_data(inplace_record.data(), inplace_record.len());
   record.set_rid(rid);
@@ -1347,8 +1340,8 @@ RC RecordFileScanner::close_scan()
 
 RC RecordFileScanner::next(Record &record)
 {
-  // RC rc = fetch_next_record();
-  RC rc = my_fetch_next_record();
+  RC rc = fetch_next_record();
+  // RC rc = my_fetch_next_record();
   if (OB_FAIL(rc)) {
     return rc;
   }

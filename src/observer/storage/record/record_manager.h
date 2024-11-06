@@ -242,11 +242,10 @@ protected:
    */
   void fix_record_capacity()
   {
-    // RID_POINTER = 12, 但是这里不能用RID_POINTER,所以直接使用常量了
-    int32_t last_record_offset = page_header_->data_offset + page_header_->record_capacity * (page_header_->record_size + 12);
+    int32_t last_record_offset = page_header_->data_offset + page_header_->record_capacity * (page_header_->record_size);
     while (last_record_offset > BP_PAGE_DATA_SIZE) {
       page_header_->record_capacity -= 1;
-      last_record_offset -= (page_header_->record_size + 12);
+      last_record_offset -= (page_header_->record_size);
     }
   }
 
@@ -257,7 +256,7 @@ protected:
    */
   char *get_record_data(SlotNum slot_num)
   {
-    return frame_->data() + page_header_->data_offset + ((page_header_->record_size + 12) * slot_num);
+    return frame_->data() + page_header_->data_offset + ((page_header_->record_size) * slot_num);
   }
 
 protected:
