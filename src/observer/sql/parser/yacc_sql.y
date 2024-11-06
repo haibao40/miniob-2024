@@ -820,6 +820,15 @@ rel_attr:
       free($3);
       free($5);
     }
+    | ID DOT ID ID{
+      $$ = new RelAttrSqlNode;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias          = $4;
+      free($1);
+      free($3);
+      free($4);
+    }
     ;
 
 relation:
