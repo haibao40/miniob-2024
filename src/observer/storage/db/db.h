@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/buffer/double_write_buffer.h"
 
 class Table;
+class View;
 class LogHandler;
 class BufferPoolManager;
 class TrxKit;
@@ -65,27 +66,34 @@ public:
    */
   RC create_table(const char *table_name, span<const AttrInfoSqlNode> attributes,
       const StorageFormat storage_format = StorageFormat::ROW_FORMAT);
+  RC create_view(const char *view_name, span<const ViewAttrInfoSqlNode> attributes);
+
+  
 
 /**
    * @brief 删除一个表
    * @param table_name 表名
    */
   RC drop_table(const char *table_name);      
+  RC drop_view(const char *view_name);
 
   /**
    * @brief 根据表名查找表
    */
   Table *find_table(const char *table_name) const;
+  View *find_view(const char *view_name) const;
   /**
    * @brief 根据表ID查找表
    */
   Table *find_table(int32_t table_id) const;
+  View *find_view(int32_t view_id) const;
 
   /// @brief 当前数据库的名称
   const char *name() const;
 
   /// @brief 列出所有的表
   void all_tables(vector<string> &table_names) const;
+  void all_views(vector<string> &view_names) const;
 
   /**
    * @brief 将所有内存中的数据，刷新到磁盘中。
@@ -105,6 +113,7 @@ public:
 private:
   /// @brief 打开所有的表。在数据库初始化的时候会执行
   RC open_all_tables();
+  RC open_all_views();
   /// @brief 恢复数据。在数据库初始化的时候运行。
   RC recover();
 
@@ -120,12 +129,14 @@ private:
   string                         name_;                 ///< 数据库名称
   string                         path_;                 ///< 数据库文件存放的目录
   unordered_map<string, Table *> opened_tables_;        ///< 当前所有打开的表
+  unordered_map<string, View *>  opened_views_;        ///< 当前所有打开的视图
   unique_ptr<BufferPoolManager>  buffer_pool_manager_;  ///< 当前数据库的buffer pool管理器
   unique_ptr<LogHandler>         log_handler_;          ///< 当前数据库的日志处理器
   unique_ptr<TrxKit>             trx_kit_;              ///< 当前数据库的事务管理器
 
   /// 给每个table都分配一个ID，用来记录日志。这里假设所有的DDL都不会并发操作，所以相关的数据都不上锁
   int32_t next_table_id_ = 0;
+  int32_t next_view_id_   = 0;
 
   LSN check_point_lsn_ = 0;  ///< 当前数据库的检查点LSN。会记录到磁盘中。
 };

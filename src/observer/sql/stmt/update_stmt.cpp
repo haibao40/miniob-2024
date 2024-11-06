@@ -36,7 +36,7 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   //确定要更新的字段是否存在
-  for(int i = 0; i < update.update_unites.size();i++) {
+  for(size_t i = 0; i < update.update_unites.size();i++) {
     const char* update_field_name = update.update_unites[i].field_name.c_str();
     const FieldMeta* field_meta = table->table_meta().field(update_field_name);
     if(field_meta == nullptr) {
@@ -46,7 +46,7 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   //表达式中可能存在子查询，为子查询创建stmt,实现将UnboundSubqueryExpr转换为BoundSubqueryExpr
-  for(int i = 0; i < update.update_unites.size();i++) {
+  for(size_t i = 0; i < update.update_unites.size();i++) {
     UpdateUnite& update_unite = update.update_unites[i];
     Expression* expr = update_unite.expression;
     if(expr->type() == ExprType::UNBOUND_SUBQUERY) {

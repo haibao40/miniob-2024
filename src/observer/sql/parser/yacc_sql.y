@@ -89,6 +89,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         ORDER
         TABLE
         TABLES
+        VIEW
+        VIEWS
         INDEX
         CALC
         SELECT
@@ -165,6 +167,8 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   RelAttrSqlNode *                           rel_attr;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  std::vector<ViewAttrInfoSqlNode> *         view_attr_infos;
+  ViewAttrInfoSqlNode *                      view_attr_info;
   UpdateUnite *                              update_unite;
   std::vector<UpdateUnite> *                 update_unite_list;
   Expression *                               expression;
@@ -221,8 +225,10 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_view_stmt
 %type <sql_node>            create_table_select_stmt
 %type <sql_node>            drop_table_stmt
+%type <sql_node>            drop_view_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
 %type <sql_node>            create_index_stmt
@@ -259,7 +265,9 @@ command_wrapper:
   | update_stmt
   | delete_stmt
   | create_table_stmt
+  | create_view_stmt
   | drop_table_stmt
+  | drop_view_stmt
   | show_tables_stmt
   | desc_table_stmt
   | create_index_stmt
@@ -594,6 +602,19 @@ update_unite:
       $$ = new UpdateUnite();
       $$->field_name = $1;
       $$->expression = $3;
+    }
+    ;
+create_view_stmt:              /*  create_view 语句的语法解析树*/
+    CREATE VIEW ID AS select_stmt{
+      $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+      $$->create_view.view_name    = $3;
+      $$->create_view.sql_node      = $5; 
+      free($3);
+    }
+    ;
+drop_view_stmt:
+    DROP VIEW ID{
+      //do nothing
     }
     ;
 create_table_select_stmt:      /*  create_table_select 语句的语法解析树*/

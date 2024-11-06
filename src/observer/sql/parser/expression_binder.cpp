@@ -206,7 +206,11 @@ RC ExpressionBinder::bind_unbound_field_expression(
     FieldExpr *field_expr = new FieldExpr(field);
     //有别名取别名，没别名用字段名
     field_expr_name += strcasecmp(field_alias, "") == 0 ? field_name : field_alias;
-    field_expr->set_name(field_expr_name);
+    if(strcasecmp(field_alias, "") == 0){
+      field_expr->set_name(field_expr_name);
+    }else{
+      field_expr->set_name(field_alias);
+    }
     bound_expressions.emplace_back(field_expr);
   }
 

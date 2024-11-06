@@ -165,6 +165,13 @@ struct UpdateSqlNode
   std::vector<ConditionSqlNode> conditions;
 };
 
+
+struct ViewAttrInfoSqlNode{
+  std::string name;
+  std::string table_name;
+  std::string field_name;
+};
+
 /**
  * @brief 描述一个属性
  * @ingroup SQLParser
@@ -320,6 +327,12 @@ struct CreateTableSelectSqlNode
   ParsedSqlNode* sql_node;
 };
 
+struct CreateViewSqlNode
+{
+  std::string                  view_name;   ///< Relation name
+  ParsedSqlNode*               sql_node;
+};
+
 /**
  * @brief 表示一个SQL语句的类型
  * @ingroup SQLParser
@@ -333,6 +346,7 @@ enum SqlCommandFlag
   SCF_UPDATE,
   SCF_DELETE,
   SCF_CREATE_TABLE,
+  SCF_CREATE_VIEW,
   SCF_DROP_TABLE,
   SCF_CREATE_INDEX,
   SCF_DROP_INDEX,
@@ -365,6 +379,7 @@ public:
   DeleteSqlNode            deletion;
   UpdateSqlNode            update;
   CreateTableSqlNode       create_table;
+  CreateViewSqlNode        create_view;
   DropTableSqlNode         drop_table;
   CreateIndexSqlNode       create_index;
   DropIndexSqlNode         drop_index;

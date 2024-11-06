@@ -26,6 +26,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/meta_util.h"
 #include "storage/table/table.h"
 #include "storage/table/table_meta.h"
+#include "storage/view/view.h"
+#include "storage/view/view_meta.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/disk_log_handler.h"
 #include "storage/clog/integrated_log_replayer.h"
@@ -35,6 +37,10 @@ using namespace common;
 Db::~Db()
 {
   for (auto &iter : opened_tables_) {
+    delete iter.second;
+  }
+
+  for(auto &iter : opened_views_){
     delete iter.second;
   }
 
@@ -120,6 +126,12 @@ RC Db::init(const char *name, const char *dbpath, const char *trx_kit_name, cons
     return rc;
   }
 
+  rc = open_all_views();
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to open all viewes. dbpath=%s, rc=%s", dbpath, strrc(rc));
+    return rc;
+  }
+
   rc = init_dblwr_buffer();
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to init dblwr buffer. rc = %s", strrc(rc));
@@ -161,6 +173,31 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
   return RC::SUCCESS;
 }
 
+RC Db::create_view(const char *view_name, span<const ViewAttrInfoSqlNode> attributes)
+{
+  RC rc = RC::SUCCESS;
+  // check table_name
+  if (opened_tables_.count(view_name) != 0) {
+    LOG_WARN("%s has been opened before.", view_name);
+    return RC::SCHEMA_VIEW_EXIST;
+  }
+
+  // 文件路径可以移到view模块
+  string  view_file_path = view_meta_file(path_.c_str(), view_name);
+  View  *view           = new View();
+  int32_t view_id        = next_view_id_++;
+  rc = view->create(this, view_id, view_file_path.c_str(), view_name, path_.c_str(), attributes);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to create view %s.", view_name);
+    delete view;
+    return rc;
+  }
+
+  opened_views_[view_name] = view;
+  LOG_INFO("Create view success. view name=%s, view_id:%d", view_name, view_id);
+  return RC::SUCCESS;
+}
+
 RC Db::drop_table(const char *table_name)
 {
   RC rc = RC::SUCCESS;
@@ -177,13 +214,6 @@ RC Db::drop_table(const char *table_name)
   int32_t table_id        = next_table_id_--; //把tableid减回去
   Table *table = find_table(table_name);//找到表
   
-  // rc = table->create(this, table_id, table_file_path.c_str(), table_name, path_.c_str(), attributes, storage_format);
-  //rc = table->d
-  // if (rc != RC::SUCCESS) {
-  //   LOG_ERROR("Failed to create table %s.", table_name);
-  //   delete table;
-  //   return rc;
-  // }
   rc = table->drop(table_file_path.c_str());
   if(rc != RC::SUCCESS){
     LOG_ERROR("Failed to drop table %s.", table_name);
@@ -191,8 +221,36 @@ RC Db::drop_table(const char *table_name)
   }
   delete table;
   opened_tables_.erase(table_name);
-  // opened_tables_[table_name] = table;
+  
   LOG_INFO("Drop table success. table name=%s, table_id:%d", table_name, table_id);
+
+  return RC::SUCCESS;
+}
+
+RC Db::drop_view(const char *view_name)
+{
+  RC rc = RC::SUCCESS;
+  // check view_name
+  if (opened_views_.count(view_name) == 0) {
+    LOG_WARN("%s has not exit before.", view_name);
+    return RC::SCHEMA_VIEW_NOT_EXIST;
+  }
+
+  // 文件路径可以移到view模块
+  string  view_file_path = view_meta_file(path_.c_str(), view_name);
+  
+  int32_t view_id        = next_view_id_--; //把viewid减回去
+  View *view = find_view(view_name);//找到表
+  
+  rc = view->drop(view_file_path.c_str());
+  if(rc != RC::SUCCESS){
+    LOG_ERROR("Failed to drop view %s.", view_name);
+    return rc;
+  }
+  delete view;
+  opened_views_.erase(view_name);
+  // opened_views_[view_name] = view;
+  LOG_INFO("Drop view success. view name=%s, view_id:%d", view_name, view_id);
 
   return RC::SUCCESS;
 }
@@ -210,6 +268,25 @@ Table *Db::find_table(int32_t table_id) const
 {
   for (auto pair : opened_tables_) {
     if (pair.second->table_id() == table_id) {
+      return pair.second;
+    }
+  }
+  return nullptr;
+}
+
+View *Db::find_view(const char *view_name) const
+{
+  unordered_map<string, View *>::const_iterator iter = opened_views_.find(view_name);
+  if (iter != opened_views_.end()) {
+    return iter->second;
+  }
+  return nullptr;
+}
+
+View *Db::find_view(int32_t view_id) const
+{
+  for (auto pair : opened_views_) {
+    if (pair.second->view_id() == view_id) {
       return pair.second;
     }
   }
@@ -255,12 +332,58 @@ RC Db::open_all_tables()
   return rc;
 }
 
+RC Db::open_all_views()
+{
+  vector<string> view_meta_files;
+
+  int ret = list_file(path_.c_str(),VIEW_META_FILE_PATTERN, view_meta_files);
+  if (ret < 0) {
+    LOG_ERROR("Failed to list view meta files under %s.", path_.c_str());
+    return RC::IOERR_READ;
+  }
+
+  RC rc = RC::SUCCESS;
+  for (const string &filename : view_meta_files) {
+    View *view = new View();
+    rc           = view->open(this, filename.c_str(), path_.c_str());
+    if (rc != RC::SUCCESS) {
+      delete view;
+      LOG_ERROR("Failed to open view. filename=%s", filename.c_str());
+      return rc;
+    }
+
+    if (opened_views_.count(view->name()) != 0) {
+      LOG_ERROR("Duplicate view with difference file name. view=%s, the other filename=%s",
+          view->name(), filename.c_str());
+      // 在这里原本先删除view后调用view->name()方法，犯了use-after-free的错误
+      delete view;
+      return RC::INTERNAL;
+    }
+
+    if (view->view_id() >= next_view_id_) {
+      next_view_id_ = view->view_id() + 1;
+    }
+    opened_views_[view->name()] = view;
+    LOG_INFO("Open view: %s, file: %s", view->name(), filename.c_str());
+  }
+
+  LOG_INFO("All view have been opened. num=%d", opened_views_.size());
+  return rc;
+}
+
 const char *Db::name() const { return name_.c_str(); }
 
 void Db::all_tables(vector<string> &table_names) const
 {
   for (const auto &table_item : opened_tables_) {
     table_names.emplace_back(table_item.first);
+  }
+}
+
+void Db::all_views(vector<string> &view_names) const
+{
+  for (const auto &view_item : opened_views_) {
+    view_names.emplace_back(view_item.first);
   }
 }
 
