@@ -50,7 +50,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     select_stmt->scope_->parent = GlobalVariable::curren_resolve_select_stmt->scope_;
   }
   // 将表和字段的信息记录到 当前查询的作用域中，包括了别名等信息，关联子查询可能会用到这些东西
-  SelectStmt::add_table_and_field_info_to_scope(db,select_sql, select_stmt);
+  RC rc = SelectStmt::add_table_and_field_info_to_scope(db,select_sql, select_stmt);
+  if(rc != RC::SUCCESS) {
+    return rc;
+  }
   GlobalVariable::curren_resolve_select_stmt = select_stmt;   //在全局变量中，记录当前的select_stmt，以便在解析子查询时使用
 
   BinderContext binder_context;
@@ -179,7 +182,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
-  RC          rc          = FilterStmt::create(db,
+  rc          = FilterStmt::create(db,
       default_table,
       &table_map,
       select_sql.conditions.data(),
@@ -434,6 +437,10 @@ RC SelectStmt::add_table_and_field_info_to_scope(Db *db, SelectSqlNode &select_s
     Table* table = db->find_table(table_name2alias_pair.first.c_str());
     if(table == nullptr) {
       LOG_WARN("要查找的表不存在，table_name:%s", table_name2alias_pair.first.c_str());
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+    if(stmt->scope_->name2table.find(table_name2alias_pair.second) != stmt->scope_->name2table.end()) {
+      LOG_WARN("别名已经存在，在同一层的查询中使用了重复的别名，sql不合法");
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
     stmt->scope_->name2table[table_name2alias_pair.first] = table;  // 添加<表名，表对象>的映射
