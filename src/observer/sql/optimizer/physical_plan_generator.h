@@ -30,6 +30,7 @@ class GroupByLogicalOperator;
 class OrderByLogicalOperator; //李晓鹏 不加这一行 build 报错
 class UpdateLogicalOperator;
 class InsertTuplesLogicalOperator;
+class LimitLogicalOperator;
 
 /**
  * @brief 物理计划生成器
@@ -47,6 +48,7 @@ public:
   RC create_vec(LogicalOperator &logical_operator, std::unique_ptr<PhysicalOperator> &oper);
 
 private:
+  RC create_plan(LimitLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(TableGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(PredicateLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(ProjectLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);

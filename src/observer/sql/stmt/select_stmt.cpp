@@ -217,6 +217,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->order_by_.swap(order_by_expressions);
   select_stmt->join_filter_.swap(join_filter);
+  select_stmt->limit_count_ = select_sql.limit_count;
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }
