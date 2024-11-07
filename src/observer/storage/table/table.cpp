@@ -472,8 +472,9 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     }
   }
   else if(field->type() == AttrType::VECTORS) {
-    if (copy_len > data_len) {
-      copy_len = data_len;
+    if (copy_len != data_len) {
+      LOG_WARN("传入value的存储长度，与向量字段字段元数据FieldMeta中定义的长度不相等");
+      return RC::INVALID_ARGUMENT;
     }
   }
  
