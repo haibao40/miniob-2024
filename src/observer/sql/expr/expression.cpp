@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/global_variable.h"
 #include "sql/operator/physical_operator.h"
 #include "event/sql_debug.h"
+#include "sql/parser/hierarchical_scope.h"
 
 using namespace std;
 
@@ -54,6 +55,15 @@ RC FieldExpr::get_column(Chunk &chunk, Column &column)
   return RC::SUCCESS;
 }
 
+ValueExpr::ValueExpr(const UnboundFieldExpr* unbound_field_expr)
+{
+  is_runtime_ = true;
+  field_info_.table_name = unbound_field_expr->table_name();
+  field_info_.table_alias = unbound_field_expr->table_alias();
+  field_info_.field_name = unbound_field_expr->field_name();
+  field_info_.field_alias = unbound_field_expr->field_alias();
+}
+
 bool ValueExpr::equal(const Expression &other) const
 {
   if (this == &other) {
@@ -68,6 +78,12 @@ bool ValueExpr::equal(const Expression &other) const
 
 RC ValueExpr::get_value(const Tuple &tuple, Value &value) const
 {
+  if(is_runtime_) {  //运行是常量，需要到绑定的作用域中去取值
+    RC rc = scope_->set_value_for_runtime_value_exprs(this);
+    if(rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
   value = value_;
   return RC::SUCCESS;
 }
@@ -1158,25 +1174,27 @@ RC VectorFunctionExpr::calc_value(const Value &left_value, const Value &right_va
 
 RC SubqueryExpr::get_value(const Tuple &tuple, Value &value) const
 {
+  bind_tuple_to_scope(tuple);
   RC rc = RC::SUCCESS;
   if(!is_correlated) { //非相关子查询获取结果
     rc = get_signal_value_in_non_correlated_query(value);
     non_correlated_query_completed_rc = rc;   //记录rc,保证之后拿到的rc都和第一次相同
   }
   else {  //相关子查询获取结果，暂时未实现
-    rc = RC::UNIMPLEMENTED;
+    rc = get_signal_value_in_correlated_query(value);
   }
   return rc;
 }
 
 RC SubqueryExpr::get_value_list(const Tuple &tuple, vector<Value>& vector) const
 {
+  bind_tuple_to_scope(tuple);
   RC rc = RC::SUCCESS;
   if(!is_correlated) { //非相关子查询获取结果
     rc = get_value_list_in_non_correlated_query(vector);
   }
   else {  //相关子查询获取结果，暂时未实现
-    rc = RC::UNIMPLEMENTED;
+    rc = get_value_list_in_correlated_query(vector);
   }
   return rc;
 }
@@ -1277,4 +1295,94 @@ RC SubqueryExpr::get_value_list_in_non_correlated_query(vector<Value>& value_lis
     value_list.insert(value_list.begin(), vec_result_values_.begin(), vec_result_values_.end());
   }
   return rc;
+}
+
+RC SubqueryExpr::get_signal_value_in_correlated_query(Value& value) const
+{
+  RC rc = RC::SUCCESS;
+  rc =physical_operator_->open(GlobalVariable::trx);
+  if(rc != RC::SUCCESS) {
+    LOG_ERROR("执行子查询时，打开子查询的物理算子失败");
+    return rc;
+  }
+  rc = physical_operator_->next();
+  Value value_temp;
+  vector<Value> value_list;
+  while (rc == RC::SUCCESS) {
+    Tuple* current_tuple = physical_operator_->current_tuple();
+    if(current_tuple->cell_num() != 1) {
+      LOG_ERROR("在执行标量子查询的过程中，子查询单次next方法返回的值不是1个，即没有返回数据或者返回了一行数据，SQL不合法");
+      rc = physical_operator_->close();
+      if(rc != RC::SUCCESS) {
+        LOG_ERROR("关闭子查询物理算子失败");
+      }
+      return RC::ILLEGAL_SUB_QUERY;
+    }
+    current_tuple->cell_at(0, value_temp);
+    value_list.push_back(value_temp);
+    rc = physical_operator_->next();
+  }
+  if(rc == RC::RECORD_EOF) {
+    rc = RC::SUCCESS;
+  }
+  else if(rc != RC::SUCCESS) {
+    LOG_ERROR("子查询在执行过程中出现异常情况");
+    physical_operator_->close();
+    return rc;
+  }
+  if(value_list.size() != 1) {
+    LOG_ERROR("在执行标量子查询的过程中，子查询实际返回了%d个值，SQL不合法", (int)value_list.size());
+    sql_debug("在执行标量子查询的过程中，子查询实际返回了%d个值，SQL不合法", (int)value_list.size());
+    rc = physical_operator_->close();
+    if(rc != RC::SUCCESS) {
+      LOG_ERROR("关闭子查询物理算子失败");
+    }
+    if(value_list.size() == 0) {
+      return RC::ILLEGAL_SUB_QUERY_zero_record;
+    }
+    else{
+      return RC::ILLEGAL_SUB_QUERY_multiple_record;
+    }
+  }
+  value = value_list[0];
+  physical_operator_->close();
+
+  return rc;
+}
+
+RC SubqueryExpr::get_value_list_in_correlated_query(vector<Value>& value_list) const
+{
+  RC rc = RC::SUCCESS;
+
+  rc =physical_operator_->open(GlobalVariable::trx);
+  if(rc != RC::SUCCESS) {
+    LOG_ERROR("执行子查询时，打开子查询的物理算子失败");
+    return rc;
+  }
+  //这个方法是列子查询，所以有多个值
+  rc = physical_operator_->next();
+  Value value;
+  while (rc == RC::SUCCESS) {
+    Tuple* current_tuple = physical_operator_->current_tuple();
+    current_tuple->cell_at(0, value);  //列子查询，所以每次next只有一个值
+    value_list.push_back(value);
+    rc = physical_operator_->next();
+  }
+  if(rc == RC::RECORD_EOF) {     //列子查询正常结束
+    rc = RC::SUCCESS;
+  }
+  else if(rc != RC::SUCCESS) {   //列子查询执行过程中出错
+    LOG_ERROR("列子查询在执行过程中出现异常情况");
+    physical_operator_->close();
+    return rc;
+  }
+
+  return rc;
+}
+
+void SubqueryExpr::bind_tuple_to_scope(const Tuple& tuple) const
+{
+  if(select_stmt_->parent_ != nullptr) {
+    select_stmt_->parent_->scope_->tuple = const_cast<Tuple *> (&tuple);
+  }
 }

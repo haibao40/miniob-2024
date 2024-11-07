@@ -25,6 +25,7 @@ class FieldMeta;
 class FilterStmt;
 class Db;
 class Table;
+class HierarchicalScope;
 
 /**
  * @brief 表示select语句
@@ -39,8 +40,23 @@ public:
   StmtType type() const override { return StmtType::SELECT; }
 
 public:
+  ///这个是正常的针对select语句
   static RC create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt);
+  ///这个函数是专门为create_table_select的select子查询创建select_stmt使用的
   static RC create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt);
+
+private:
+  /***
+   * @brief 将表和字段的信息记录到 HierarchicalScope 变量的作用域中，包括了别名等信息，关联子查询可能会用到这些东西
+   */
+  static RC add_table_and_field_info_to_scope(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt);
+  /***
+   * @brief 在现阶段，将别名替换为真实的名字，需要处理select后面的表达式，以及where后面的表达式,
+   *        TODO:目前，这里先不进行实现，因为题目中的别名使用场景相对简单，遇到问题后，再到这里进行处理
+   *        case1: 表的别名.字段名 ---->  表的真实名.字段名
+   *        case2: 字段别名       ---->  表的真实名.字段名
+   */
+  static RC replace_alias_to_real_name(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt);
 
 public:
   const std::vector<Table *> &tables() const { return tables_; }
@@ -61,4 +77,7 @@ private:
   FilterStmt                              *having_filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> order_by_;
   std::vector<FilterStmt*> join_filter_;
+public:
+  HierarchicalScope* scope_ = nullptr;   //当前子查询对应的作用域
+  SelectStmt*  parent_ = nullptr; //当前子查询对应的上层查询的select_stmt
 };
