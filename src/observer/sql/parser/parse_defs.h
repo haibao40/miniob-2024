@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/value.h"
 
 class Expression;
+enum class ExprType;
 
 /**
  * @defgroup SQLParser SQL Parser
@@ -167,6 +168,7 @@ struct UpdateSqlNode
 
 
 struct ViewAttrInfoSqlNode{
+  ExprType    expr_type;
   std::string name;
   std::string table_name;
   std::string field_name;

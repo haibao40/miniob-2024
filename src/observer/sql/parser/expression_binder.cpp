@@ -553,3 +553,57 @@ RC ExpressionBinder::bind_subquery_expression(
   bound_expressions.emplace_back(std::move(subquery_expr));
   return RC::SUCCESS;
 }
+
+bool ExpressionBinder::isOperator(char c) {
+    return c == '+' || c == '-' || c == '*' || c == '/';
+}
+
+int ExpressionBinder::precedence(char op) {
+    if (op == '+' || op == '-') return 1;
+    if (op == '*' || op == '/') return 2;
+    return 0;
+}
+
+std::string ExpressionBinder::getNextToken(const std::string& expr, size_t& pos) {
+    while (std::isspace(expr[pos])) ++pos; // 跳过空格
+    size_t start = pos;
+    if (std::isdigit(expr[start])) { // 数字
+        while (std::isdigit(expr[pos])) ++pos;
+    } else if (expr[start] == '-' && std::isdigit(expr[start + 1])) { // 负数
+        ++pos;
+        while (std::isdigit(expr[pos])) ++pos;
+    } else if (isOperator(expr[start])) { // 操作符
+        ++pos;
+    } else { // 标识符
+        while (std::isalnum(expr[pos]) || expr[pos] == '.') ++pos;
+    }
+    return expr.substr(start, pos - start);
+}
+
+bool ExpressionBinder::isInteger(const std::string& str) {
+    // Check if the string is empty or has only digits
+    for (char ch : str) {
+        if (!isdigit(static_cast<unsigned char>(ch))) {
+            return false;
+        }
+    }
+    return true;
+}
+ 
+bool ExpressionBinder::isWord(const std::string& str) {
+    // Check if the string contains at least one alphabetic character
+    for (char ch : str) {
+        if (isalpha(static_cast<unsigned char>(ch))) {
+            return true;
+        }
+    }
+    // If no alphabetic character is found, it's not a word
+    return false;
+}
+
+bool ExpressionBinder::startsWith(const std::string& str, const std::string& prefix) {
+    if (str.length() < prefix.length()) {
+        return false;
+    }
+    return str.compare(0, prefix.length(), prefix) == 0;
+}

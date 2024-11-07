@@ -10,6 +10,7 @@
 #include "storage/table/table_meta.h"
 #include "storage/trx/trx.h"
 #include "json/json.h"
+#include "sql/parser/parse_defs.h"
 
 static const Json::StaticString FIELD_VIEW_ID("view_id");
 static const Json::StaticString FIELD_VIEW_NAME("view_name");
@@ -42,10 +43,12 @@ RC ViewMeta::init(int32_t view_id, const char *name,
 
   RC rc = RC::SUCCESS;
 
+  view_fields_.resize(attributes.size());
+
   for (size_t i = 0; i < attributes.size(); i++) {
     const ViewAttrInfoSqlNode &attr_info = attributes[i];
     // `i` is the col_id of fields[i]
-    rc = view_fields_[i].init(
+    rc = view_fields_[i].init(attr_info.expr_type,
       attr_info.name.c_str(), attr_info.table_name.c_str(), attr_info.field_name.c_str());
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init view field meta. view name=%s, field name: %s", name, attr_info.name.c_str());

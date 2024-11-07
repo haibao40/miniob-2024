@@ -445,6 +445,7 @@ private:
   Type                        arithmetic_type_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
+  std::string                 expr;
 };
 
 class UnboundAggregateExpr : public Expression

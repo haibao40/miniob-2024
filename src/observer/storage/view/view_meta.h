@@ -14,6 +14,7 @@
 #include "storage/view/view_field_meta.h"
 #include "storage/field/field_meta.h"
 #include "storage/index/index_meta.h"
+#include "sql/parser/parse_defs.h"
 
 /**
  * @brief 表元数据

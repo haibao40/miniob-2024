@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include <map>
 
 #include "sql/expr/expression.h"
+#include <unordered_map>
 
 class BinderContext
 {
@@ -80,4 +81,51 @@ private:
       std::unique_ptr<Expression> &subquery_expr, std::vector<unique_ptr<Expression>> &bound_expressions);
 private:
   BinderContext &context_;
+
+public:
+  std::unordered_map<char, ArithmeticExpr::Type> char2type = {{'+',ArithmeticExpr::Type::ADD },
+                                                              {'-',ArithmeticExpr::Type::SUB },
+                                                              {'*',ArithmeticExpr::Type::MUL },
+                                                              {'/',ArithmeticExpr::Type::DIV },};
+
+  bool isOperator(char c);
+  int precedence(char op);
+  std::string getNextToken(const std::string& expr, size_t& pos);
+  //parse会把所有的加减法都解析出来
+  Expression* parseExpression(const std::string& expr, size_t& pos, const char *table_name) {
+    // Expression *node = nullptr;
+    size_t lpos = pos, rpos;
+    Expression *left = nullptr, *right = nullptr;
+    bool has_op = false;
+    char op;
+    while (pos < expr.length()) {
+        op = expr[pos++];
+        if(op == '+' || op == '-'){
+          left = parseExpression(expr.substr(lpos, pos-lpos-1), lpos, table_name);
+          rpos = pos;
+          right = parseExpression(expr.substr(rpos, expr.length()-pos), rpos, table_name);
+          break;
+        }else if(op == '*' || op == '/'){
+          has_op = true;
+          break;
+        }
+    }
+
+    if(left == nullptr && right == nullptr && !has_op){
+      std::string str = getNextToken(expr, lpos);
+      if(isInteger(str)){
+        return new ValueExpr(Value(std::stoi(str)));
+      }else{
+        UnboundFieldExpr* unbound_fieldexpr = new UnboundFieldExpr(table_name, expr);
+        return unbound_fieldexpr;
+      }
+    }else if(left == nullptr && right == nullptr && has_op){
+      return nullptr;
+    }
+    return new ArithmeticExpr(char2type[op], left, right);
+  }
+
+  bool isInteger(const std::string& str);
+  bool isWord(const std::string& str);
+  bool startsWith(const std::string& str, const std::string& prefix);
 };

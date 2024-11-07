@@ -20,10 +20,10 @@ class ViewFieldMeta
 {
 public:
   ViewFieldMeta() = default;
-  ViewFieldMeta(const char *name, const char *table_name, const char *field_name);
+  ViewFieldMeta(ExprType expr_type, const char *name, const char *table_name, const char *field_name);
   ~ViewFieldMeta() = default;
 
-  RC init(const char *name, const char *table_name, const char *field_name);
+  RC init(ExprType expr_type, const char *name, const char *table_name, const char *field_name);
 
 public:
   const char *name() const;
@@ -39,6 +39,7 @@ public:
   static RC from_json(const Json::Value &json_value, ViewFieldMeta &field);
   
 protected:
+  ExprType expr_type_;
   string   name_;
   AttrType attr_type_;
   string   table_name_;

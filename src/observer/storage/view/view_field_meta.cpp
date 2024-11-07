@@ -9,17 +9,18 @@
 
 #include "json/json.h"
 
+const static Json::StaticString FIELD_VIEW_EXPR_TYPE("expr_type");
 const static Json::StaticString FIELD_VIEW_NAME("name");
 const static Json::StaticString FIELD_VIEW_TABLE_NAME("table_name");
 const static Json::StaticString FIELD_VIEW_FIELD_NAME("field_name");
 
-ViewFieldMeta::ViewFieldMeta(const char *name, const char *table_name, const char *field_name)
+ViewFieldMeta::ViewFieldMeta(ExprType expr_type, const char *name, const char *table_name, const char *field_name)
 {
-  [[maybe_unused]] RC rc = this->init(name, table_name, field_name);
+  [[maybe_unused]] RC rc = this->init(expr_type, name, table_name, field_name);
   ASSERT(rc == RC::SUCCESS, "failed to init view field meta. rc=%s", strrc(rc));
 }
 
-RC ViewFieldMeta::init(const char *name, const char *table_name, const char *field_name)
+RC ViewFieldMeta::init(ExprType expr_type, const char *name, const char *table_name, const char *field_name)
 {
   if (common::is_blank(name)) {
     LOG_WARN("Name cannot be empty");
@@ -36,6 +37,7 @@ RC ViewFieldMeta::init(const char *name, const char *table_name, const char *fie
     return RC::INVALID_ARGUMENT;
   }
 
+  expr_type_   = expr_type;
   name_        = name;
   table_name_  = table_name;
   field_name_  = field_name;
@@ -51,7 +53,8 @@ const char *ViewFieldMeta::field_name() const { return field_name_.c_str(); }
 
 void ViewFieldMeta::to_json(Json::Value &json_value) const
 {
-  json_value[FIELD_VIEW_NAME]    = name_;
+  json_value[FIELD_VIEW_EXPR_TYPE]     = (int)expr_type_;
+  json_value[FIELD_VIEW_NAME]          = name_;
   json_value[FIELD_VIEW_TABLE_NAME]    = table_name_;
   json_value[FIELD_VIEW_FIELD_NAME]    = field_name_;
 }
@@ -63,13 +66,17 @@ RC ViewFieldMeta::from_json(const Json::Value &json_value, ViewFieldMeta &field)
     return RC::INTERNAL;
   }
 
-  const Json::Value &name_value    = json_value[FIELD_VIEW_NAME];
+  const Json::Value &expr_type_value     = json_value[FIELD_VIEW_EXPR_TYPE];
+  const Json::Value &name_value          = json_value[FIELD_VIEW_NAME];
   const Json::Value &table_name_value    = json_value[FIELD_VIEW_NAME];
   const Json::Value &field_name_value    = json_value[FIELD_VIEW_NAME];
   
-
+  if (!expr_type_value.isIntegral()) {
+    LOG_ERROR("View expr type is not a string. json value=%d", expr_type_value.toStyledString().c_str());
+    return RC::INTERNAL;
+  }
   if (!name_value.isString()) {
-    LOG_ERROR("View Field name is not a string. json value=%s", name_value.toStyledString().c_str());
+    LOG_ERROR("View name is not a string. json value=%s", name_value.toStyledString().c_str());
     return RC::INTERNAL;
   }
   if (!table_name_value.isString()) {
@@ -81,10 +88,10 @@ RC ViewFieldMeta::from_json(const Json::Value &json_value, ViewFieldMeta &field)
     return RC::INTERNAL;
   }
 
-
-  const char *name    = name_value.asCString();
+  ExprType expr_type        = (ExprType)expr_type_value.asInt();
+  const char *name          = name_value.asCString();
   const char *table_name    = table_name_value.asCString();
   const char *field_name    = field_name_value.asCString();
   
-  return field.init(name, table_name, field_name);
+  return field.init(expr_type, name, table_name, field_name);
 }
