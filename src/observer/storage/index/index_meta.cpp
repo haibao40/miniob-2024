@@ -23,7 +23,22 @@ const static Json::StaticString FIELD_NAME("name");
 const static Json::StaticString FIELD_FIELD_NAME("field_name");
 const static Json::StaticString FIELDS("fields");  
 const static Json::StaticString IS_UNIQUE("is_unique"); 
-
+const static Json::StaticString DISTANCE_TYPE("distance_type");
+RC IndexMeta::init(const char *name,const vector<FieldMeta> &fields,bool is_unique,int distance_type){
+  if (common::is_blank(name)) {
+    LOG_ERROR("Failed to init index, name is empty.");
+    return RC::INVALID_ARGUMENT;
+  }
+  name_  = name;
+  distance_type_ = distance_type;
+  is_unique_ = is_unique;
+  vector<FieldMeta> *fields_temp = new vector<FieldMeta>;
+  for(auto field : fields){
+    fields_temp->push_back(field);
+  }
+  fields_ = *fields_temp;
+  return RC::SUCCESS;
+}
 RC IndexMeta::init(const char *name, const FieldMeta &field)
 {
   if (common::is_blank(name)) {
@@ -50,7 +65,34 @@ RC IndexMeta::init(const char *name,const vector<const FieldMeta*> &fields,bool 
   return RC::SUCCESS;
 
 }
-
+RC IndexMeta::init(const char *name,const vector<const FieldMeta*>&fields,int distanace_type){
+  if (common::is_blank(name)) {
+    LOG_ERROR("Failed to init index, name is empty.");
+    return RC::INVALID_ARGUMENT;
+  }
+  name_  = name;
+  distance_type_ = distance_type_;
+  vector<FieldMeta> *fields_temp = new vector<FieldMeta>;
+  for(auto field : fields){
+    fields_temp->push_back(*field);
+  }
+  fields_ = *fields_temp;
+  return RC::SUCCESS;
+}
+RC IndexMeta::init(const char *name,const vector<FieldMeta> &fields,int distance_type){
+   if (common::is_blank(name)) {
+    LOG_ERROR("Failed to init index, name is empty.");
+    return RC::INVALID_ARGUMENT;
+  }
+  name_  = name;
+  distance_type_ = distance_type;
+  vector<FieldMeta> *fields_temp = new vector<FieldMeta>;
+  for(auto field : fields){
+    fields_temp->push_back(field);
+  }
+  fields_ = *fields_temp;
+  return RC::SUCCESS;
+}
 RC IndexMeta::init(const char *name,const vector<FieldMeta> &fields,bool is_unique){
     if (common::is_blank(name)) {
     LOG_ERROR("Failed to init index, name is empty.");
@@ -76,6 +118,7 @@ void IndexMeta::to_json(Json::Value &json_value) const
     fields_value.append(std::move(field_value));
   }
   json_value[FIELDS] = std::move(fields_value);
+  json_value[DISTANCE_TYPE] = distance_type_;
 }
 
 RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index)
@@ -83,6 +126,7 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
   const Json::Value &name_value  = json_value[FIELD_NAME];
   const Json::Value& fields_value = json_value[FIELDS];  
   const Json::Value& is_unique_value = json_value[IS_UNIQUE]; 
+  const Json::Value& distance_type_value = json_value[DISTANCE_TYPE];
   //const Json::Value &field_value = json_value[FIELD_FIELD_NAME];
   if (!name_value.isString()) {
     LOG_ERROR("Index name is not a string. json value=%s", name_value.toStyledString().c_str());
@@ -92,6 +136,10 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
     LOG_ERROR("Fields of index are not an array. json value=%s", fields_value.toStyledString().c_str());  
     return RC::INTERNAL;  
   }  
+  if(!distance_type_value.isInt()){
+    LOG_ERROR("Is unique of index is not a boolean. json value=%s", distance_type_value.toStyledString().c_str());  
+    return RC::INTERNAL;  
+  }
   if (!is_unique_value.isBool()) {  
     LOG_ERROR("Is unique of index is not a boolean. json value=%s", is_unique_value.toStyledString().c_str());  
     return RC::INTERNAL;  
@@ -105,7 +153,7 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
   }
 
 
-   return index.init(name_value.asCString(), fields,is_unique_value.asBool());
+   return index.init(name_value.asCString(), fields,is_unique_value.asBool(),distance_type_value.asInt());
 }
 
 const char *IndexMeta::name() const { return name_.c_str(); }

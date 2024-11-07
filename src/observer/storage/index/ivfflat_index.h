@@ -11,7 +11,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "storage/index/index.h"
-
+#include "common/rc.h"
 /**
  * @brief ivfflat 向量索引
  * @ingroup Index
@@ -21,15 +21,16 @@ class IvfflatIndex : public Index
 public:
   IvfflatIndex(){};
   virtual ~IvfflatIndex() noexcept {};
-
+  RC open(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_metas);
+  RC create(Table *table, const char *file_name, const IndexMeta &index_meta, vector<const FieldMeta*>* &field_meta);
   RC create(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta)
   {
-    return RC::UNIMPLEMENTED;
+    return RC::SUCCESS;
   };
   RC open(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta)
   {
 
-    return RC::UNIMPLEMENTED;
+    return RC::SUCCESS;
   };
 
   vector<RID> ann_search(const vector<float> &base_vector, size_t limit) { return vector<RID>(); }
@@ -40,6 +41,9 @@ public:
   RC delete_entry(const char *record, const RID *rid) override { return RC::UNIMPLEMENTED; };
 
   RC sync() override { return RC::UNIMPLEMENTED; };
+  IndexScanner *create_scanner(const char *left_key, int left_len, bool left_inclusive, const char *right_key,
+      int right_len, bool right_inclusive) override{return NULL;}
+  RC destroy()override {return RC::SUCCESS;}
 
 private:
   bool   inited_ = false;

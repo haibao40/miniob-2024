@@ -97,7 +97,8 @@ RC  CreateVectorIndexStmt::create(Db *db, const CreateVectorIndexSqlNode &create
     return RC::SCHEMA_INDEX_NAME_REPEAT;
   }
 
-  stmt = new CreateIndexStmt(table, field_metas, create_index.index_name,false);
+  //stmt = new CreateIndexStmt(table, field_metas, create_index.index_name,false);
+  stmt = new CreateVectorIndexStmt(table, field_metas, create_index.index_name,create_index.lists,create_index.distance_type,create_index.probes);
   return RC::SUCCESS;
 
 }

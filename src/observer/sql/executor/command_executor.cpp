@@ -37,7 +37,10 @@ RC CommandExecutor::execute(SQLStageEvent *sql_event)
       CreateIndexExecutor executor;
       rc = executor.execute(sql_event);
     } break;
-
+    case StmtType::CREATE_VECTOR_INDEX: {
+      CreateVectorIndexExecutor executor;
+      rc = executor.execute(sql_event);
+    }
     case StmtType::CREATE_TABLE: {
       CreateTableExecutor executor;
       rc = executor.execute(sql_event);
@@ -83,11 +86,11 @@ RC CommandExecutor::execute(SQLStageEvent *sql_event)
       LoadDataExecutor executor;
       rc = executor.execute(sql_event);
     } break;
-
+    
     case StmtType::EXIT: {
       rc = RC::SUCCESS;
     } break;
-
+    
     default: {
       LOG_ERROR("unknown command: %d", static_cast<int>(stmt->type()));
       rc = RC::UNIMPLEMENTED;

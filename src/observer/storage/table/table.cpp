@@ -30,6 +30,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
+#include "storage/index/ivfflat_index.h"
 
 Table::~Table()
 {
@@ -504,7 +505,78 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   }
   return rc;
 }
+RC Table::create_vector_index(Trx *trx, const vector<const FieldMeta*> *field_metas, const char *index_name,
+                        int lists,int distance_type,int probes){
+                           vector<const FieldMeta*> *field_meta_not_const = new vector<const FieldMeta*> ();
+  for(auto field : *field_metas){
+    field_meta_not_const->push_back(field);
+  }
+  if(common::is_blank(index_name)){
+    LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
+    return RC::INVALID_ARGUMENT;
+  }
+  for(auto field_meta:*field_metas){
+    if(nullptr == field_meta){
+    LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
+    return RC::INVALID_ARGUMENT;
+    }
+  }
+  IndexMeta new_index_meta;
+  RC rc = new_index_meta.init(index_name, *field_metas,distance_type);
+  if(rc != RC::SUCCESS) {
+    LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s",
+             name(), index_name);
+    return rc;
+  }
+  // 创建索引相关数据
+  IvfflatIndex *index      = new IvfflatIndex();
+  string          index_file = table_index_file(base_dir_.c_str(), name(), index_name);
 
+  rc = index->create(this, index_file.c_str(), new_index_meta, field_meta_not_const);
+  if (rc != RC::SUCCESS) {
+    delete index;
+    LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
+    return rc;
+  }
+
+  // 遍历当前的所有数据，插入这个索引
+  RecordFileScanner scanner;
+  rc = get_record_scanner(scanner, trx, ReadWriteMode::READ_ONLY);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create scanner while creating index. table=%s, index=%s, rc=%s",
+             name(), index_name, strrc(rc));
+    return rc;
+  }
+  Record record;
+  while (OB_SUCC(rc = scanner.next(record))) {
+    rc = index->insert_entry(record.data(), &record.rid());
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+               name(), index_name, strrc(rc));
+      return rc;
+    }
+  }
+  if (RC::RECORD_EOF == rc) {
+    rc = RC::SUCCESS;
+  } else {
+    LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+             name(), index_name, strrc(rc));
+    return rc;
+  }
+  scanner.close_scan();
+  LOG_INFO("inserted all records into new index. table=%s, index=%s", name(), index_name);
+
+   indexes_.push_back(index);
+
+  /// 接下来将这个索引放到表的元数据中
+  TableMeta new_table_meta(table_meta_);
+  rc = new_table_meta.add_index(new_index_meta);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to add index (%s) on table (%s). error=%d:%s", index_name, name(), rc, strrc(rc));
+    return rc;
+  }
+  return rc;
+  }
 
 RC Table::create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, const char *index_name,bool is_unique){
   vector<const FieldMeta*> *field_meta_not_const = new vector<const FieldMeta*> ();

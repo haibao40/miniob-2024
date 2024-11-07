@@ -38,6 +38,9 @@ public:
   RC init(const char *name, const FieldMeta &field);
   RC init(const char *name,const vector<const FieldMeta*>&fields,bool is_unique_);
   RC init(const char *name,const vector<FieldMeta> &fields,bool is_unique);
+  RC init(const char *name,const vector<const FieldMeta*>&fields,int distanace_type);
+  RC init(const char *name,const vector<FieldMeta> &fields,int distance_type);
+  RC init(const char *name,const vector<FieldMeta> &fields,bool is_unique,int distance_type);
 public:
   const char *name() const;
   const char *field() const;
@@ -57,5 +60,6 @@ protected:
   string field_;  // field's name
   //vector<string>* fields_;
   std::vector<FieldMeta> fields_; 
-  bool is_unique_;
+  bool is_unique_ = false;
+  int distance_type_ = -1 ;
 };
