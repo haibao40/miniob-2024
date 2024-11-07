@@ -64,6 +64,14 @@ RC Table::create(Db *db, int32_t table_id, const char *path, const char *name, c
     LOG_WARN("Name cannot be empty");
     return RC::INVALID_ARGUMENT;
   }
+
+  for(auto attribute: attributes) {
+    if(attribute.type == AttrType::VECTORS && attribute.length > (16000+1)*sizeof(float)) { //建表时，最大只支持16000维的向量
+      LOG_WARN("VECTOR类型最大只支持16000维");
+      return RC::INVALID_ARGUMENT;
+    }
+  }
+
   LOG_INFO("Begin to create table %s:%s", base_dir, name);
 
   if (attributes.size() == 0) {
