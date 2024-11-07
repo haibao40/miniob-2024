@@ -38,6 +38,10 @@ RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::stri
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
 
+    if(conditions[i].conjunction_with_or == true) {
+      tmp_stmt->conjunction_with_or = true;
+    }
+
     rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
     if (rc != RC::SUCCESS) {
       delete tmp_stmt;
@@ -89,6 +93,9 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     LOG_WARN("invalid compare operator : %d", comp);
     return RC::INVALID_ARGUMENT;
   }
+
+  //替换掉relAttrSqlNode，变成对应的UnboundFieldExpr,让它走表达式的绑定流程，方便处理
+  replace_relAttrSqlNode_to_expr(const_cast<ConditionSqlNode&>(condition));
 
   filter_unit = new FilterUnit;
 
@@ -177,4 +184,25 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   // 检查两个类型是否能够比较
   return rc;
+}
+
+
+void FilterStmt::replace_relAttrSqlNode_to_expr(ConditionSqlNode &condition)
+{
+  if(condition.left_is_attr) {
+    auto left_attr_node = condition.left_attr;
+    UnboundFieldExpr *unbound_field_expr = new UnboundFieldExpr(left_attr_node.relation_name.c_str(),
+      left_attr_node.attribute_name.c_str(), left_attr_node.alias.c_str());
+    condition.left_expr = unbound_field_expr;
+    condition.left_is_attr = 0;
+    condition.left_is_expr = 1;
+  }
+  if(condition.right_is_attr) {
+    auto right_attr_node = condition.right_attr;
+    UnboundFieldExpr *unbound_field_expr = new UnboundFieldExpr(right_attr_node.relation_name.c_str(),
+      right_attr_node.attribute_name.c_str(), right_attr_node.alias.c_str());
+    condition.right_expr = unbound_field_expr;
+    condition.right_is_attr = 0;
+    condition.right_is_expr = 1;
+  }
 }

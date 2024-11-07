@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <stddef.h>
+#include <vector>
 
 #include "common/log/log.h"
 #include "common/rc.h"
@@ -35,6 +36,7 @@ struct RID
 {
   PageNum page_num;  // record's page number
   SlotNum slot_num;  // record's slot number
+  RID * next = nullptr;
 
   RID() = default;
   RID(const PageNum _page_num, const SlotNum _slot_num) : page_num(_page_num), slot_num(_slot_num) {}
@@ -175,6 +177,29 @@ public:
     this->data_ = data;
     this->len_  = len;
   }
+
+  void set_len(int len){
+    this->len_ = len;
+  }
+
+  void add_data(char *data, int len){
+    char *tmp = (char *)malloc(len + this->len_);
+    memcpy(tmp, this->data_, this->len_); //把原数据拷贝过去
+    memcpy(tmp + this->len_, data, len);  //把新数据拷贝过去
+
+    char* p = this->data_;
+    free(p);
+    // this
+    // memcpy(this->data_ + this->len_, data, len);
+    this->set_data_owner(tmp, len+this->len_);
+  }
+
+  void reset(){
+    this->data_ = nullptr;
+    this->len_  = 0;
+    owner_ = false;
+  }
+
   void set_data_owner(char *data, int len)
   {
     ASSERT(len != 0, "the len of data should not be 0");
@@ -229,6 +254,7 @@ public:
   char       *data() { return this->data_; }
   const char *data() const { return this->data_; }
   int         len() const { return this->len_; }
+  bool      owner() const { return this->owner_; }
 
   void set_rid(const RID &rid) { this->rid_ = rid; }
   void set_rid(const PageNum page_num, const SlotNum slot_num)

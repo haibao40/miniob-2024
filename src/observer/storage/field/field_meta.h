@@ -39,6 +39,7 @@ public:
   const char *name() const;
   AttrType    type() const;
   int         offset() const;
+  int         offset(int index) const;
   int         len() const;
   bool        visible() const;
   int         field_id() const;
@@ -53,11 +54,12 @@ public:
   // 特别记录一下空值列表的字段名
   static const std::string null_value_list_field_name;
 protected:
-  string   name_;
-  AttrType attr_type_;
-  int      attr_offset_;
-  int      attr_len_;
-  bool     visible_;
-  int      field_id_;
-  bool     not_null_;   //true：表示在创建表时，该字段被标记为not null，默认为false
+  string           name_;
+  AttrType         attr_type_;
+  int              attr_offset_;
+  std::vector<int> attr_offsets_;
+  int              attr_len_;
+  bool             visible_;
+  int              field_id_;
+  bool             not_null_;   //true：表示在创建表时，该字段被标记为not null，默认为false
 };

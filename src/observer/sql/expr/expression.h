@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 class Tuple;
 class PhysicalOperator;
 class LogicalOperator;
+class HierarchicalScope;
 /**
  * @defgroup Expression
  * @brief 表达式
@@ -228,6 +229,17 @@ private:
   Field field_;
 };
 
+/***
+* @brief 表示一个字段的信息，为啥不用已经有的tupleCellSpec,因为感觉char*风格的C字符串用起来不方便
+*/
+struct FieldInfo{
+  std::string table_name;   //表名
+  std::string table_alias;  //表的别名
+  std::string field_name;   //真实的字段名
+  std::string field_alias;  //字段的别名
+  AttrType attr_type;       //字段的类型
+};
+
 /**
  * @brief 常量值表达式
  * @ingroup Expression
@@ -238,6 +250,14 @@ public:
   ValueExpr() = default;
   explicit ValueExpr(const Value &value) : value_(value) {}
 
+  /***
+   * @brief 运行时常量构造函数
+   * @param unbound_field_expr 原有的未绑定表达式
+   * @param scope 当前查询对应的作用域
+   */
+  explicit ValueExpr(const UnboundFieldExpr* unbound_field_expr);
+
+
   virtual ~ValueExpr() = default;
 
   bool equal(const Expression &other) const override;
@@ -246,19 +266,48 @@ public:
   RC get_column(Chunk &chunk, Column &column) override;
   RC try_get_value(Value &value) const override
   {
+    if(is_runtime_) {  //运行时常量，不支持这个方法
+      return RC::UNIMPLEMENTED;
+    }
     value = value_;
     return RC::SUCCESS;
   }
 
   ExprType type() const override { return ExprType::VALUE; }
-  AttrType value_type() const override { return value_.attr_type(); }
+  AttrType value_type() const override
+  {
+    if(is_runtime_) {  //运行时常量，值的类型就是绑定的字段的类型
+      return field_info_.attr_type;
+    }
+    return value_.attr_type();
+  }
   int      value_length() const override { return value_.length(); }
 
   void         get_value(Value &value) const { value = value_; }
   const Value &get_value() const { return value_; }
+  void set_value(Value &value) const { value_ = value; }
+  bool is_runtime() const { return is_runtime_;}
+  ///将这个常量表达式设置为运行时常量
+  void set_runtime(FieldInfo field_info) const
+  {
+    field_info_ = field_info;
+    is_runtime_ = true;
+  }
+
+  FieldInfo& get_field_info() const{ return field_info_; }
+  void set_field_info(FieldInfo& field_info) const{ field_info_ = field_info; }
+
+  void set_hierarchical_scope(HierarchicalScope* scope) const {scope_ = scope;}
+  HierarchicalScope* get_hierarchical_scope() const { return scope_;}
 
 private:
-  Value value_;
+  mutable Value value_;
+  ///标志位：用来表示是否是一个运行时常量,运行时常量用于子查询中，具体的值依赖于上层查询，在子查询执行之前才能确定常量的值
+  mutable bool is_runtime_ = false;
+  ///运行时常量对应的字段信息
+  mutable FieldInfo field_info_;
+  ///之后要去获取值的作用域
+  mutable HierarchicalScope* scope_ = nullptr;
 };
 
 /**
@@ -665,6 +714,13 @@ public:
     physical_operator_ = physical_operator;
   }
 
+  void set_select_stmt(SelectStmt* select_stmt)
+  {
+    select_stmt_ = select_stmt;
+  }
+
+  void set_is_correlated(){ is_correlated = true;}
+
   PhysicalOperator* physical_operator() {return physical_operator_;}
 
 private:
@@ -674,9 +730,11 @@ private:
   LogicalOperator* logical_operator_ = nullptr;
   ///子查询对应的PhysicalOperator
   PhysicalOperator* physical_operator_ = nullptr;
+  ///当前子查询对应的作用域
+  HierarchicalScope* scope_ = nullptr;
 
-  ///标志位，表示子查询是否是关联子查询，默认为false,即不是关联子查询
-  mutable bool is_correlated = false;
+  ///标志位，表示子查询是否是关联子查询，默认为false,即不是关联子查询,为了方便处理复杂子查询，这里先默认设置为true
+  mutable bool is_correlated = true;
 
   ///标志位，表示非关联子查询是否已经执行，如果为true，获取表达式的值的时候，就不需要再次执行子查询了
   mutable bool non_correlated_query_completed = false;
@@ -691,8 +749,27 @@ private:
   ///记录非相关子查询返回多个值，即非相关行子查询
   mutable std::vector<Value> vec_result_values_;
 
+  /***
+   * @brief 获取“非相关-标量子查询”的值
+   */
   RC get_signal_value_in_non_correlated_query(Value& value) const;
+  /***
+   * @brief 获取“非相关-列子查询”的值
+   */
   RC get_value_list_in_non_correlated_query(vector<Value>& value_list) const;
+  /***
+   * @brief 获取“相关-标量子查询”的值
+   */
+  RC get_signal_value_in_correlated_query(Value& value) const;
+  /***
+   * @brief 获取“相关-列子查询”的值
+   */
+  RC get_value_list_in_correlated_query(vector<Value>& value_list) const;
+
+  /***
+   * @brief 将上层传下来的tuple，绑定到对应的作用域中
+   */
+  void bind_tuple_to_scope(const Tuple& tuple) const;
 };
 
 

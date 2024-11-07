@@ -52,12 +52,18 @@ RC UpdatePhysicalOperator::open(Trx *trx)
   }
 
   std::unique_ptr<PhysicalOperator> &child = children_[0];
+  // std::unique_ptr<PhysicalOperator> &child1 = children_[1];
 
   rc = child->open(trx);   //打开下层算子
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to open child operator: %s", strrc(rc));
     return rc;
   }
+  // rc = child1->open(trx);
+  // if (rc != RC::SUCCESS) {
+  //   LOG_WARN("failed to open child operator: %s", strrc(rc));
+  //   return rc;
+  // }
 
   vector<Record> old_records;
   vector<vector<Value> > new_record_values;

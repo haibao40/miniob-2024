@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <map>
+#include <unordered_map>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -43,6 +45,18 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   return expr;
 }
 
+ArithmeticExpr *create_arithmetic_expression_with_alias(ArithmeticExpr::Type type,
+                                             Expression *left,
+                                             Expression *right,
+                                             char* alias)
+{
+  Value value(0);
+  ValueExpr *zero = new ValueExpr(value);
+  ArithmeticExpr *expr = type == ArithmeticExpr::Type::NEGATIVE ? new ArithmeticExpr(ArithmeticExpr::Type::SUB, zero, left) : new ArithmeticExpr(type, left, right);
+  expr->set_name(alias);
+  return expr;
+}
+
 VectorFunctionExpr *create_vector_function_expression(VectorFunctionExpr::VECTOR_FUNCTION type,
                                              Expression *left,
                                              Expression *right,
@@ -62,6 +76,15 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 {
   UnboundAggregateExpr *expr = new UnboundAggregateExpr(aggregate_name, child);
   expr->set_name(token_name(sql_string, llocp));
+  return expr;
+}
+
+UnboundAggregateExpr *create_aggregate_expression_with_alias(const char *aggregate_name,
+                                           Expression *child,
+                                           char *alias)
+{
+  UnboundAggregateExpr *expr = new UnboundAggregateExpr(aggregate_name, child);
+  expr->set_name(alias);
   return expr;
 }
 
@@ -111,6 +134,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         STRING_T
         FLOAT_T
         DATE_T
+        TEXT_T
         VECTOR_T
         HELP
         EXIT
@@ -120,6 +144,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -431,7 +456,11 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = 4;
+      if($$->type == AttrType::TEXTS){
+        $$->length = 65535;
+      }else{
+        $$->length = 4;
+      }
       $3 == 1 ? $$->not_null = true : $$->not_null = false;
       free($1);
     }
@@ -450,6 +479,7 @@ type:
     | STRING_T { $$ = static_cast<int>(AttrType::CHARS); }
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
     | DATE_T  { $$ = static_cast<int>(AttrType::DATES); }
+    | TEXT_T   { $$ = static_cast<int>(AttrType::TEXTS); }
     | VECTOR_T { $$ = static_cast<int>(AttrType::VECTORS); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
@@ -711,14 +741,38 @@ expression:
     expression '+' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
     }
+    | expression '+' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $4);
+    }
+    | expression '+' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $5);
+    }
     | expression '-' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, $3, sql_string, &@$);
+    }
+    | expression '-' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $4);
+    }
+    | expression '-' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $5);
     }
     | expression '*' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1, $3, sql_string, &@$);
     }
+    | expression '*' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $4);
+    }
+    | expression '*' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $5);
+    }
     | expression '/' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1, $3, sql_string, &@$);
+    }
+    | expression '/' expression ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $4);
+    }
+    | expression '/' expression AS ID{
+      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $5);
     }
     | LBRACE expression RBRACE {
       $$ = $2;
@@ -740,6 +794,9 @@ expression:
     }
     | '*' {
       $$ = new StarExpr();
+    }
+    | ID DOT '*' {
+      $$ = new StarExpr($1);
     }
     | L2_DISTANCE LBRACE expression COMMA expression RBRACE       /* l2_distance(vector A, vector B) */
     {
@@ -771,32 +828,92 @@ expression:
     | SUM LBRACE expression RBRACE{
       $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
     }
+    | SUM LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("SUM", $3, $5);
+    }
+    | SUM LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("SUM", $3, $6);
+    }
     | MAX LBRACE expression RBRACE{
       $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
+    }
+    | MAX LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MAX", $3, $5);
+    }
+    | MAX LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MAX", $3, $6);
     }
     | MIN LBRACE expression RBRACE{
       $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
     }
+    | MIN LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MIN", $3, $5);
+    }
+    | MIN LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MIN", $3, $6);
+    }
     | AVG LBRACE expression RBRACE{
       $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
+    }
+    | AVG LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("AVG", $3, $5);
+    }
+    | AVG LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("AVG", $3, $6);
     }
     | COUNT LBRACE expression RBRACE{
       $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
     }
+    | COUNT LBRACE expression RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", $3, $5);
+    }
+    | COUNT LBRACE expression RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", $3, $6);
+    }
     | SUM LBRACE expression_list RBRACE {
       $$ = create_aggregate_expression("SUM", nullptr, sql_string, &@$);
+    }
+    | SUM LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("SUM", nullptr, $5);
+    }
+    | SUM LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("SUM", nullptr, $6);
     }
     | MAX LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("MAX", nullptr, sql_string, &@$);
     }
+    | MAX LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MAX", nullptr, $5);
+    }
+    | MAX LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MAX", nullptr, $6);
+    }
     | MIN LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("MIN", nullptr, sql_string, &@$);
+    }
+    | MIN LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("MIN", nullptr, $5);
+    }
+    | MIN LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("MIN", nullptr, $6);
     }
     | AVG LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("AVG", nullptr, sql_string, &@$);
     }
+    | AVG LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("AVG", nullptr, $5);
+    }
+    | AVG LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("AVG", nullptr, $6);
+    }
     | COUNT LBRACE expression_list RBRACE{
       $$ = create_aggregate_expression("COUNT", nullptr, sql_string, &@$);
+    }
+    | COUNT LBRACE expression_list RBRACE ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", nullptr, $5);
+    }
+    | COUNT LBRACE expression_list RBRACE AS ID{
+      $$ = create_aggregate_expression_with_alias("COUNT", nullptr, $6);
     }
     | LBRACE select_stmt RBRACE {
       printf("解析子查询");
@@ -831,6 +948,18 @@ rel_attr:
       free($1);
       free($3);
     }
+    | '*' ID{
+      $$ = new RelAttrSqlNode;
+      $$->attribute_name = "";  /* 这里是不合法的，为了方便适配测试用例返回failure，让它通过语法解析,匹配不到就会返回failure */
+      $$->alias          = "";
+      free($2);
+    }
+    | '*' AS ID{
+      $$ = new RelAttrSqlNode;
+      $$->attribute_name = "";  /* 这里是不合法的，为了方便适配测试用例返回failure，让它通过语法解析,匹配不到就会返回failure */
+      $$->alias          = "";
+      free($3);
+    }
     | ID DOT ID AS ID{
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
@@ -839,6 +968,15 @@ rel_attr:
       free($1);
       free($3);
       free($5);
+    }
+    | ID DOT ID ID{
+      $$ = new RelAttrSqlNode;
+      $$->relation_name  = $1;
+      $$->attribute_name = $3;
+      $$->alias          = $4;
+      free($1);
+      free($3);
+      free($4);
     }
     ;
 
@@ -1066,6 +1204,12 @@ condition_list:
     }
     | condition AND condition_list {
       $$ = $3;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | condition OR condition_list {
+      $$ = $3;
+      $1->conjunction_with_or = true;
       $$->emplace_back(*$1);
       delete $1;
     }
