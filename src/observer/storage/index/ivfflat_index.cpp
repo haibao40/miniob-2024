@@ -154,6 +154,9 @@ std::vector<float> IvfflatIndex::mean_of_vectors(const std::vector<std::vector<f
                 new_centroids.push_back(mean_of_vectors(points));
             }
             //new_centroids.resize(k);
+            for(int i=new_centroids.size();i<k;i++){
+                new_centroids.push_back(centroids[i]);
+            }
 
             // 检查质心是否发生变化
             for (int i = 0; i < k; ++i) {
