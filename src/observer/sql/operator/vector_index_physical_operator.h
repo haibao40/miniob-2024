@@ -48,6 +48,6 @@ private:
   IvfflatIndex *index_ = nullptr;
   int limit_ ;
   vector<float> base_vector_;
-  vector<Record>* records_;
+  vector<Record*>* records_;
   int count = 0 ;
 };

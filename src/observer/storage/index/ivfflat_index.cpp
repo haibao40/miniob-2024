@@ -129,8 +129,7 @@ std::vector<float> IvfflatIndex::mean_of_vectors(const std::vector<std::vector<f
        std::map<std::vector<float>, std::vector<std::pair<std::vector<float>, RID>>> clusters;
         while (centroids_changed && iteration < 150) {
             centroids_changed = false;
-            
-
+            clusters.clear();
             // 分配数据点到最近的质心
             for (size_t i = 0; i < data.size(); ++i) {
                 float min_dist = std::numeric_limits<float>::max();

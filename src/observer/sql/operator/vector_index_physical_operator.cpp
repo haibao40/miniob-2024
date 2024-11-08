@@ -17,14 +17,14 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 
 using namespace std;
-static RowTuple* get_data_from_record(Table* table,char* record_data)
+static RowTuple* get_data_from_record(Table* table,Record* record)
   {
     //RC rc = RC::SUCCESS;
-    Record record;
-    record.set_data(record_data, table->table_meta().record_size());
+    //Record record;
+    //record.set_data(record_data, table->table_meta().record_size());
     RowTuple* row_tuple = new RowTuple();
     row_tuple->set_schema(table, table->table_meta().field_metas());
-    row_tuple->set_record(&record);
+    row_tuple->set_record(record);
     
     return row_tuple;
   }
@@ -42,9 +42,6 @@ std::string VectorIndexPhysicalOperator::param() const {
 RC VectorIndexPhysicalOperator::open(Trx *trx)
 {
   records_ = table_->ann_search(base_vector_,limit_,index_);
-  for(int i=0 ;i<records_->size();i++){
-
-  }
   return RC::SUCCESS;
 }
 
@@ -63,8 +60,9 @@ RC VectorIndexPhysicalOperator::close() {
 
 Tuple *VectorIndexPhysicalOperator::current_tuple()
 {
-  Record *record = &records_->at(count);
-  Tuple* tuple  = get_data_from_record(table_,record->data());
+  Record* record = records_->at(count);
+  Tuple* tuple  = get_data_from_record(table_,record);
+  //cout<<tuple->to_string();
   count++;
   return tuple;
 }

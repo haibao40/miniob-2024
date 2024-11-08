@@ -873,13 +873,13 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 }
 
 
-vector<Record>* Table::ann_search(vector<float> base_vector, int limit,IvfflatIndex* index){
-  vector<Record>* result = new vector<Record>();
+vector<Record*>* Table::ann_search(vector<float> base_vector, int limit,IvfflatIndex* index){
+  vector<Record*>* result = new vector<Record*>();
   vector<RID> ids = index->ann_search(base_vector,limit);
   for(int i=0;i<ids.size();i++){
       Record* record = new Record();
       this->get_record((ids[i]),*record);
-      result->push_back(*record);
+      result->push_back(record);
   }
   return result;
 

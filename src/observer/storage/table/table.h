@@ -42,7 +42,7 @@ class Table
 public:
   Table() = default;
   ~Table();
-  vector<Record>* ann_search(vector<float> base_vector, int limit,IvfflatIndex* index);
+  vector<Record*>* ann_search(vector<float> base_vector, int limit,IvfflatIndex* index);
   /**
    * 创建一个表
    * @param path 元数据保存的文件(完整路径)
