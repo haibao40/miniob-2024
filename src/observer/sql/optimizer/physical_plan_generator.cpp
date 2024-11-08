@@ -52,6 +52,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/order_by_logical_operator.h"
 #include "sql/operator/order_by_logical_operator.cpp"
 #include "sql/operator/order_by_physical_operator.cpp"
+#include "sql/operator/vector_index_physical_operator.cpp"
+#include "sql/operator/vector_index_logical_operator.cpp"
 using namespace std;
 
 RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<PhysicalOperator> &oper)
@@ -103,10 +105,13 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
     }break;
     case LogicalOperatorType::LIMIT: {
       return create_plan(static_cast<LimitLogicalOperator &>(logical_operator), oper);
-    }
+    }break;
     case LogicalOperatorType::INSERT_TUPLES: {
       return create_plan(static_cast<InsertTuplesLogicalOperator &>(logical_operator), oper);
     } break;
+    case LogicalOperatorType::VectorIndex: {
+      return create_plan(static_cast<VectorIndexLogicalOperator &>(logical_operator), oper);
+    }
     default: {
       ASSERT(false, "unknown logical operator type");
       return RC::INVALID_ARGUMENT;
@@ -549,6 +554,12 @@ RC PhysicalPlanGenerator::create_vec_plan(ProjectLogicalOperator &project_oper, 
 
   LOG_TRACE("create a project physical operator");
   return rc;
+}
+RC PhysicalPlanGenerator::create_plan(VectorIndexLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper){
+       unique_ptr<PhysicalOperator> temp =  make_unique<VectorIndexPhysicalOperator>(logical_oper.table(),logical_oper.index()
+                     ,logical_oper.limit(),logical_oper.base_vector());
+       oper = std::move(temp);
+    return RC::SUCCESS;
 }
 
 

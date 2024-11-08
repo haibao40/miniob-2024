@@ -72,7 +72,7 @@ class CreateVectorIndexStmt : public Stmt
 
   virtual ~CreateVectorIndexStmt() = default;
 
-  StmtType type() const override { return StmtType::CREATE_INDEX; }
+  StmtType type() const override { return StmtType::CREATE_VECTOR_INDEX; }
 
   Table             *table() const { return table_; }
   const FieldMeta   *field_meta() const { return field_meta_; }

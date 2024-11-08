@@ -40,7 +40,7 @@ RC CommandExecutor::execute(SQLStageEvent *sql_event)
     case StmtType::CREATE_VECTOR_INDEX: {
       CreateVectorIndexExecutor executor;
       rc = executor.execute(sql_event);
-    }
+    }break;
     case StmtType::CREATE_TABLE: {
       CreateTableExecutor executor;
       rc = executor.execute(sql_event);

@@ -48,6 +48,7 @@ public:
   auto field_metas() const -> const std::vector<FieldMeta>                *{ return &fields_; }
   
   const bool is_unique() const;
+  const int distance_type() const {return distance_type_;};
 
   void desc(ostream &os) const;
 

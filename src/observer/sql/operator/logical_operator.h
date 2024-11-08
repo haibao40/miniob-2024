@@ -45,6 +45,7 @@ enum class LogicalOperatorType
   GROUP_BY,      ///< 分组
   ORDER_BY,      ///< 排序
   LIMIT,
+  VectorIndex,
 };
 
 /**

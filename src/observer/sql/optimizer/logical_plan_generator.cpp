@@ -32,6 +32,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/order_by_logical_operator.h"
 #include "sql/operator/limit_logical_operator.h"
 #include "sql/operator/insert_with_tuples_logical_operator.h"
+#include "sql/operator/vector_index_logical_operator.h"
 
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
@@ -115,6 +116,20 @@ RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<Logica
 
 RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
+   unique_ptr<VectorIndexLogicalOperator> index_scan(
+    new VectorIndexLogicalOperator((select_stmt->tables())[0], ReadWriteMode::READ_ONLY,select_stmt->limit_count(),
+                                    select_stmt->order_by()));
+    if(index_scan->index() != nullptr){
+      auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+      unique_ptr<LogicalOperator> log_scan = std::move(index_scan);
+      project_oper->add_child(std::move(log_scan));
+      logical_operator = std::move(project_oper);
+      return RC::SUCCESS;
+    }
+   
+
+
+
   unique_ptr<LogicalOperator> *last_oper = nullptr;
 
   unique_ptr<LogicalOperator> table_oper(nullptr);

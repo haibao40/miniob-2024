@@ -71,7 +71,7 @@ RC IndexMeta::init(const char *name,const vector<const FieldMeta*>&fields,int di
     return RC::INVALID_ARGUMENT;
   }
   name_  = name;
-  distance_type_ = distance_type_;
+  distance_type_ = distanace_type;
   vector<FieldMeta> *fields_temp = new vector<FieldMeta>;
   for(auto field : fields){
     fields_temp->push_back(*field);
@@ -111,6 +111,7 @@ void IndexMeta::to_json(Json::Value &json_value) const
 {
   json_value[FIELD_NAME]       = name_;
   json_value[IS_UNIQUE] = is_unique_;  
+  json_value[DISTANCE_TYPE] = distance_type_;
   Json::Value fields_value;
   for (const FieldMeta &field : fields_) {
     Json::Value field_value;
@@ -118,7 +119,7 @@ void IndexMeta::to_json(Json::Value &json_value) const
     fields_value.append(std::move(field_value));
   }
   json_value[FIELDS] = std::move(fields_value);
-  json_value[DISTANCE_TYPE] = distance_type_;
+  
 }
 
 RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index)

@@ -24,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 RC CreateVectorIndexExecutor::execute(SQLStageEvent *sql_event){
   Stmt    *stmt    = sql_event->stmt();
   Session *session = sql_event->session_event()->session();
-  ASSERT(stmt->type() == StmtType::CREATE_INDEX,
+  ASSERT(stmt->type() == StmtType::CREATE_VECTOR_INDEX,
       "create index executor can not run this command: %d",
       static_cast<int>(stmt->type()));
 
