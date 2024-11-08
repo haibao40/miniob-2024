@@ -862,11 +862,9 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    if(index->is_vector_index()){
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       break;
-    }
   }
   }
   return rc;
