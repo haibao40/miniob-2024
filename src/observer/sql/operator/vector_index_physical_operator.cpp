@@ -29,7 +29,7 @@ RC VectorIndexPhysicalOperator::sorteTuples(){
     vector<float> bVector = bValue.get_vector();
     float af = index_->get_instance(aVector,base_vector_);
     float bf = index_->get_instance(bVector,base_vector_);
-    if(af < bf ){
+    if(af <= bf ){
       return true;
     }else{
       return false ;
