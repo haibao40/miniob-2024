@@ -98,7 +98,7 @@ public:
   return rc;
   }
   bool is_vector_index() override { return true; }
-  vector<RID> ann_search(const vector<float> &base_vector, size_t limit);
+  vector<RID>* ann_search(const vector<float> &base_vector, size_t limit);
   
   RC close() { return RC::UNIMPLEMENTED; }
 
