@@ -41,24 +41,20 @@ vector<RID> IvfflatIndex::ann_search(const vector<float> &base_vector, size_t li
         float diff = get_instance(base_vector, pair.first);
         differences->push_back({pair.first, diff});
     }
-    vector<RID>* temp = new vector<RID>();
     vector<RID>* result = new vector<RID>();
+    int p = 0;
     std::sort(differences->begin(), differences->end(), compareByDifference);
         for (const auto& diff : *differences) {
           const auto& key = diff.key;
           const auto& values = kmeans_->at(key);
           for (RID value : values) {
-            temp->push_back(value);
+            result->push_back(value);
           }
-          if(temp->size() >= limit){
+          if(p<=probes_){
             break;
           }
     }
-    for (int i = 0; i < temp->size() && i <= limit; i++) {
-      result->push_back(temp->at(i));
-    }
-    delete temp ;
-    return *result;
+    return *result ;
 }
 
 
@@ -127,7 +123,7 @@ std::vector<float> IvfflatIndex::mean_of_vectors(const std::vector<std::vector<f
         bool centroids_changed = true;
         int iteration = 0;
        std::map<std::vector<float>, std::vector<std::pair<std::vector<float>, RID>>> clusters;
-        while (centroids_changed && iteration < 150) {
+        while (centroids_changed && iteration < 1500) {
             centroids_changed = false;
             clusters.clear();
             // 分配数据点到最近的质心

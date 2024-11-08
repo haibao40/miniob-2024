@@ -17,6 +17,33 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 
 using namespace std;
+
+RC VectorIndexPhysicalOperator::sorteTuples(){
+  auto comparator = [this](const Tuple* a, const Tuple* b) {  
+    Value aValue ;
+    Value bValue;
+    TupleCellSpec * spec = new TupleCellSpec(table_->name(), field_name_.c_str());
+    a->find_cell(*spec, aValue);
+    b->find_cell(*spec, bValue);
+    vector<float> aVector = aValue.get_vector();
+    vector<float> bVector = bValue.get_vector();
+    float af = index_->get_instance(aVector,base_vector_);
+    float bf = index_->get_instance(bVector,base_vector_);
+    if(af < bf ){
+      return 1;
+    }else{
+      return -1 ;
+    }
+  };
+  std::sort(tuples_->begin(), tuples_->end(), comparator);
+  return RC::SUCCESS;
+}
+
+
+
+
+
+
 static RowTuple* get_data_from_record(Table* table,Record* record)
   {
     //RC rc = RC::SUCCESS;
@@ -29,12 +56,13 @@ static RowTuple* get_data_from_record(Table* table,Record* record)
     return row_tuple;
   }
 
-
-VectorIndexPhysicalOperator::VectorIndexPhysicalOperator(Table *table,IvfflatIndex*index,int limit,vector<float> base_vector){
+VectorIndexPhysicalOperator::VectorIndexPhysicalOperator(Table *table,IvfflatIndex*index,
+                     int limit,vector<float> base_vector,string field_name){
    table_ = table;
    index_=index;
    limit_=limit;
    base_vector_=base_vector;
+   field_name_ = field_name;
 }
 std::string VectorIndexPhysicalOperator::param() const {
   return std::string(index_->index_meta().name()) + " ON " + table_->name();
@@ -42,12 +70,18 @@ std::string VectorIndexPhysicalOperator::param() const {
 RC VectorIndexPhysicalOperator::open(Trx *trx)
 {
   records_ = table_->ann_search(base_vector_,limit_,index_);
+  for(int i=0 ;i<records_->size();i++){
+   Record* record = records_->at(i);
+   Tuple* tuple  = get_data_from_record(table_,record);
+   tuples_->push_back(tuple);
+  }
+  delete records_;
   return RC::SUCCESS;
 }
 
 RC VectorIndexPhysicalOperator::next()
 {
-  if(count < records_->size()){
+  if(count < limit_ && count < tuples_->size()){
     return RC::SUCCESS;
   }else{
     return RC::RECORD_EOF;
@@ -60,11 +94,10 @@ RC VectorIndexPhysicalOperator::close() {
 
 Tuple *VectorIndexPhysicalOperator::current_tuple()
 {
-  Record* record = records_->at(count);
-  Tuple* tuple  = get_data_from_record(table_,record);
-  //cout<<tuple->to_string();
+  Tuple* tuple = (*tuples_)[count];
   count++;
   return tuple;
+  
 }
 
 

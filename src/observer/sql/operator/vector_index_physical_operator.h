@@ -29,13 +29,14 @@ class VectorIndexPhysicalOperator : public PhysicalOperator
 {
 public:
   VectorIndexPhysicalOperator(Table *table) : table_(table) {}
-  VectorIndexPhysicalOperator(Table *table,IvfflatIndex*index,int limit_,vector<float> base_vector);
+  VectorIndexPhysicalOperator(Table *table,IvfflatIndex*index,int limit_,vector<float>
+                             base_vector,string field_name);
   virtual ~VectorIndexPhysicalOperator() = default;
 
   std::string param() const override;
 
   PhysicalOperatorType type() const override { return PhysicalOperatorType::VECTOR_INDEX_SCAN; }
-
+  RC sorteTuples();
   RC open(Trx *trx) override;
   RC next() override;
   RC close() override;
@@ -45,9 +46,12 @@ public:
 private:
   Table                                   *table_ = nullptr;
   Trx                                     *trx_   = nullptr;
+  FieldMeta                              *field_meta_ = nullptr;
   IvfflatIndex *index_ = nullptr;
+  string field_name_;
   int limit_ ;
   vector<float> base_vector_;
   vector<Record*>* records_;
+  vector<Tuple*>* tuples_ = new vector<Tuple*>();
   int count = 0 ;
 };

@@ -557,7 +557,7 @@ RC PhysicalPlanGenerator::create_vec_plan(ProjectLogicalOperator &project_oper, 
 }
 RC PhysicalPlanGenerator::create_plan(VectorIndexLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper){
        unique_ptr<PhysicalOperator> temp =  make_unique<VectorIndexPhysicalOperator>(logical_oper.table(),logical_oper.index()
-                     ,logical_oper.limit(),logical_oper.base_vector());
+                     ,logical_oper.limit(),logical_oper.base_vector(),logical_oper.index_name_P());
        oper = std::move(temp);
     return RC::SUCCESS;
 }
