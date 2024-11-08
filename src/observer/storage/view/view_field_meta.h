@@ -7,6 +7,7 @@
 #include "common/rc.h"
 #include "common/lang/string.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/expr/expression.h"
 
 namespace Json {
 class Value;

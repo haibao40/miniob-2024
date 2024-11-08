@@ -58,7 +58,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   // 将表和字段的信息记录到 当前查询的作用域中，包括了别名等信息，关联子查询可能会用到这些东西
   SelectStmt *select_stmt = new SelectStmt();
-  select_stmt->scope_ = new HierarchicalScope();
+  select_stmt->scope_ = new HierarchicalScope(); 
   //如果是子查询，parent会指向上一级查询，如果是最外层查询，parent会指向空指针nullptr
   select_stmt->parent_ = GlobalVariable::curren_resolve_select_stmt;
   if(GlobalVariable::curren_resolve_select_stmt != nullptr) {
@@ -525,8 +525,8 @@ RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
   const std::vector<ViewFieldMeta>* view_field_metas = view_meta.field_metas();
   for(int i = 0; i < view_meta.field_num(); i++){
     ViewFieldMeta view_field_meta =  (*view_field_metas)[i];
-    if(tables.find(view_field_meta.field_name()) == tables.end()){
-      tables.insert({view_field_meta.field_name(), view_field_meta.field_name()});
+    if(tables.find(view_field_meta.table_name()) == tables.end()){
+      tables.insert({view_field_meta.table_name(), view_field_meta.table_name()});
     }
   }
   new_select_sql.relations.swap(tables);
@@ -560,6 +560,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
         if(view_field_meta->type() == ExprType::FIELD){
           UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
           view_field_meta->field_name(), query_field_name);
+          expr->set_name(query_field_name);
           query_expressions.emplace_back(std::move(expr));
         }  
         else if(view_field_meta->type() == ExprType::ARITHMETIC){
@@ -603,6 +604,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
           if(view_field_meta->type() == ExprType::FIELD){
             UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
             view_field_meta->field_name(), query_field_name);
+            expr->set_name(query_field_name);
             query_expressions.emplace_back(std::move(expr));
           }  
           else if(view_field_meta->type() == ExprType::ARITHMETIC){
@@ -692,6 +694,7 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
       if(view_field_meta->type() == ExprType::FIELD){
         UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
         view_field_meta->field_name(), query_field_name);
+        expr->set_name(query_field_name);
         condition.left_expr = expr;
       }  //算术表达式绑定不了
       else if(view_field_meta->type() == ExprType::ARITHMETIC){
@@ -717,6 +720,7 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
       if(view_field_meta->type() == ExprType::FIELD){
         UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
         view_field_meta->field_name(), query_field_name);
+        expr->set_name(query_field_name);
         condition.right_expr = expr;
       }  //算术表达式绑定不了
       else if(view_field_meta->type() == ExprType::ARITHMETIC){

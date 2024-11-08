@@ -70,8 +70,8 @@ RC ViewFieldMeta::from_json(const Json::Value &json_value, ViewFieldMeta &field)
 
   const Json::Value &expr_type_value     = json_value[FIELD_VIEW_EXPR_TYPE];
   const Json::Value &name_value          = json_value[FIELD_VIEW_NAME];
-  const Json::Value &table_name_value    = json_value[FIELD_VIEW_NAME];
-  const Json::Value &field_name_value    = json_value[FIELD_VIEW_NAME];
+  const Json::Value &table_name_value    = json_value[FIELD_VIEW_TABLE_NAME];
+  const Json::Value &field_name_value    = json_value[FIELD_VIEW_FIELD_NAME];
   
   if (!expr_type_value.isIntegral()) {
     LOG_ERROR("View expr type is not a string. json value=%d", expr_type_value.toStyledString().c_str());
@@ -90,7 +90,8 @@ RC ViewFieldMeta::from_json(const Json::Value &json_value, ViewFieldMeta &field)
     return RC::INTERNAL;
   }
 
-  ExprType expr_type        = (ExprType)expr_type_value.asInt();
+  LOG_DEBUG("the expr_type is %d\n", expr_type_value.asInt());
+  ExprType expr_type        = (ExprType)(expr_type_value.asInt());
   const char *name          = name_value.asCString();
   const char *table_name    = table_name_value.asCString();
   const char *field_name    = field_name_value.asCString();
