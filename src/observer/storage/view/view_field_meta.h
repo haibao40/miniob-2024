@@ -27,7 +27,7 @@ public:
 
 public:
   const char *name() const;
-  AttrType    type() const;
+  ExprType    type() const;
   const char *table_name() const;
   const char *field_name() const;
 

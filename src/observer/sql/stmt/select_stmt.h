@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 
 class FieldMeta;
+class View;
 class FilterStmt;
 class Db;
 class Table;
@@ -44,6 +45,8 @@ public:
   static RC create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt);
   ///这个函数是专门为create_table_select的select子查询创建select_stmt使用的
   static RC create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt);
+  ///这个函数是针对select view
+  static RC create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt);
 
 private:
   /***
@@ -80,4 +83,10 @@ private:
 public:
   HierarchicalScope* scope_ = nullptr;   //当前子查询对应的作用域
   SelectStmt*  parent_ = nullptr; //当前子查询对应的上层查询的select_stmt
+public:
+  static RC get_query_expressions(View *view, std::vector<unique_ptr<Expression>> &query_expressions,
+                             std::vector<unique_ptr<Expression>> &true_query_expressions);
+
+  static RC get_filter_units(View *view, std::vector<ConditionSqlNode> &conditions,
+  std::vector<FilterUnit *> &filter_units);
 };

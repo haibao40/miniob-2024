@@ -132,6 +132,7 @@ class FilterStmt
 {
 public:
   FilterStmt() = default;
+  FilterStmt(std::vector<FilterUnit *> filter_units): filter_units_(filter_units) {}
   virtual ~FilterStmt();
 
 public:

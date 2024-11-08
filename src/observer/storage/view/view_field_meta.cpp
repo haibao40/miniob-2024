@@ -51,6 +51,8 @@ const char *ViewFieldMeta::name() const { return name_.c_str(); }
 const char *ViewFieldMeta::table_name() const { return table_name_.c_str(); }
 const char *ViewFieldMeta::field_name() const { return field_name_.c_str(); }
 
+ExprType ViewFieldMeta::type() const { return expr_type_; }
+
 void ViewFieldMeta::to_json(Json::Value &json_value) const
 {
   json_value[FIELD_VIEW_EXPR_TYPE]     = (int)expr_type_;

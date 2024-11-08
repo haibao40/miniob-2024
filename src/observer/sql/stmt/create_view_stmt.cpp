@@ -27,8 +27,13 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
   //根据绑定好的表达式，来获取建表的字段属性
   CreateViewStmt::get_attr_infos(db, query_expressions, view_attr_infos);
+
+  std::vector<ConditionSqlNode> view_con_infos;
+  vector<FilterUnit *> filter_units = select_stmt->filter_stmt()->filter_units();
+  CreateViewStmt::get_con_infos(db, filter_units, view_con_infos);
   
   create_view_stmt->view_attr_infos_.swap(view_attr_infos);
+  create_view_stmt->view_con_infos_.swap(view_con_infos);
 
   stmt = create_view_stmt;
   if(select_stmt != nullptr){
@@ -69,16 +74,76 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
       attr_info.name = expr->name();
       attr_info.table_name = child_expr->table_name();
       attr_info.field_name = child_expr->field_name();
+      if(strcasecmp("", expr->expr()) != 0){
+        size_t pos = std::string(expr->expr()).find("as");
+        attr_info.field_name = std::string(expr->expr()).substr(0, pos-1);
+      }
       attr_infos.push_back(attr_info);
     }else if(expression.get()->type() == ExprType::ARITHMETIC){
       auto expr = static_cast<ArithmeticExpr *>(expression.get());
       ViewAttrInfoSqlNode attr_info;
       attr_info.expr_type = ExprType::ARITHMETIC;
-      attr_info.name = expr->name();
-      attr_info.table_name = default_table->name();
-      attr_info.field_name = "many";
+      std::string view_field_name = std::string(expr->name());
+      size_t pos = view_field_name.find(std::string("as"));
+      if(pos != std::string::npos){
+        attr_info.name = view_field_name.substr(pos+3); 
+        attr_info.field_name = view_field_name.substr(0, pos-1);
+      }else{
+        attr_info.name = expr->name();
+        attr_info.field_name = expr->name();
+      }
+      attr_info.table_name = default_table->name(); //仅考虑了一个表内字段运算的情况
       attr_infos.push_back(attr_info);
     }
+  }
+  return RC::SUCCESS;
+}
+
+RC CreateViewStmt::get_con_infos(Db *db, std::vector<FilterUnit *> &filter_units, std::vector<ConditionSqlNode> &con_infos){
+  for(size_t i = 0; i < filter_units.size(); i++){
+    FilterUnit *filter_unit = filter_units[i];
+    Expression* left  = filter_unit->left().expr.get();
+    Expression* right = filter_unit->right().expr.get();
+    ConditionSqlNode condition;
+
+    condition.comp = filter_unit->comp();
+    if(left->type() == ExprType::FIELD){
+      condition.left_is_attr = 1;
+      FieldExpr *expr = static_cast<FieldExpr *>(left);
+      condition.left_attr.relation_name  = expr->table_name();
+      condition.left_attr.attribute_name = expr->field_name();
+    }else if(left->type() == ExprType::VALUE){
+      condition.left_is_attr = 0;
+      ValueExpr *expr = static_cast<ValueExpr *>(left);
+      Value value = expr->get_value();
+      if(value.attr_type() == AttrType::FLOATS){
+        
+      }else if(value.attr_type() == AttrType::INTS){
+        value.int2float();
+      }else{
+        return RC::UNIMPLEMENTED;
+      }
+    }
+
+    if(right->type() == ExprType::FIELD){
+      condition.right_is_attr = 1;
+      FieldExpr *expr = static_cast<FieldExpr *>(right);
+      condition.right_attr.relation_name  = expr->table_name();
+      condition.right_attr.attribute_name = expr->field_name();
+    }else if(right->type() == ExprType::VALUE){
+      condition.right_is_attr = 0;
+      ValueExpr *expr = static_cast<ValueExpr *>(right);
+      Value value = expr->get_value();
+      if(value.attr_type() == AttrType::FLOATS){
+        
+      }else if(value.attr_type() == AttrType::INTS){
+        value.int2float();
+      }else{
+        return RC::UNIMPLEMENTED;
+      }
+    }
+
+    con_infos.push_back(condition);
   }
   return RC::SUCCESS;
 }

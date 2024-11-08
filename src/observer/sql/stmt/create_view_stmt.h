@@ -4,10 +4,10 @@
 #include <vector>
 
 #include "sql/stmt/stmt.h"
+#include "sql/stmt/filter_stmt.h"
 #include "storage/field/field.h"
 
 class FieldMeta;
-class FilterStmt;
 class SelectStmt;
 class Db;
 class Table;
@@ -32,12 +32,15 @@ public:
 
   const std::string                  &view_name() const { return view_name_; }
   const std::vector<ViewAttrInfoSqlNode> &attr_infos() const { return view_attr_infos_; }
+  const std::vector<ConditionSqlNode> &con_infos() const { return view_con_infos_; }
 
   static RC            create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt);
   static RC get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_expressions, std::vector<ViewAttrInfoSqlNode>& attr_infos);
+  static RC get_con_infos(Db *db, std::vector<FilterUnit *> &filter_units, std::vector<ConditionSqlNode> &con_infos);
 
 private:
   std::string                  view_name_;
   std::vector<ViewAttrInfoSqlNode> view_attr_infos_;
+  std::vector<ConditionSqlNode> view_con_infos_;
 //   SelectStmt      *select_stmt_ = nullptr;
 };

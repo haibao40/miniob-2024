@@ -67,6 +67,8 @@ public:
   RC create_table(const char *table_name, span<const AttrInfoSqlNode> attributes,
       const StorageFormat storage_format = StorageFormat::ROW_FORMAT);
   RC create_view(const char *view_name, span<const ViewAttrInfoSqlNode> attributes);
+  RC create_view(const char *view_name, std::vector<ConditionSqlNode> conditions,
+                                        span<const ViewAttrInfoSqlNode> attributes);
 
   
 

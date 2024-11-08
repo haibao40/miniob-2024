@@ -574,6 +574,7 @@ RC ExpressionBinder::bind_aggregate_expression(
   }
 
   auto aggregate_expr = make_unique<AggregateExpr>(aggregate_type, std::move(child_expr));
+  aggregate_expr->set_expr(unbound_aggregate_expr->expr());
   aggregate_expr->set_name(unbound_aggregate_expr->name());
   rc = check_aggregate_expression(*aggregate_expr);
   if (OB_FAIL(rc)) {

@@ -12,6 +12,7 @@
 #include "common/rc.h"
 #include "common/types.h"
 #include "storage/view/view_field_meta.h"
+#include "storage/view/condition_meta.h"
 #include "storage/field/field_meta.h"
 #include "storage/index/index_meta.h"
 #include "sql/parser/parse_defs.h"
@@ -31,18 +32,21 @@ public:
   void swap(ViewMeta &other) noexcept;
 
   RC init(int32_t view_id, const char *name, std::span<const ViewAttrInfoSqlNode> attributes);
+  RC init(int32_t view_id, const char *name, std::vector<ConditionSqlNode> conditions,
+                                             std::span<const ViewAttrInfoSqlNode> attributes);
 
 public:
   int32_t             view_id() const { return view_id_; }
   const char         *name() const;
   const ViewFieldMeta    *field(int index) const;
   const ViewFieldMeta    *field(const char *name) const;
-  const ViewFieldMeta    *find_field_by_offset(int offset) const;
+  const ConditionMeta      *con(int index) const;
+
   auto                field_metas() const -> const std::vector<ViewFieldMeta>                *{ return &view_fields_; }
+  auto                  con_metas() const -> const std::vector<ConditionMeta>                *{ return &view_cons_; }
 
   int field_num() const;  
-
-  int record_size() const;
+  int con_num() const;
 
 public:
   int  serialize(std::ostream &os) const override;
@@ -54,5 +58,6 @@ public:
 protected:
   int32_t                view_id_ = -1;
   std::string            name_;
-  std::vector<ViewFieldMeta> view_fields_; 
+  std::vector<ViewFieldMeta> view_fields_;
+  std::vector<ConditionMeta> view_cons_; 
 };

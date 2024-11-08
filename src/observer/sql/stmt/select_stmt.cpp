@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "storage/view/view.h"
 #include "sql/parser/expression_binder.h"
 #include "sql/parser/hierarchical_scope.h"
 
@@ -25,6 +26,14 @@ See the Mulan PSL v2 for more details. */
 
 using namespace std;
 using namespace common;
+
+unordered_map<string, AggregateExpr::Type> string2type = {
+  {"sum", AggregateExpr::Type::SUM },
+  {"max", AggregateExpr::Type::MAX},
+  {"min", AggregateExpr::Type::MIN},
+  {"avg", AggregateExpr::Type::AVG},
+  {"count", AggregateExpr::Type::COUNT}
+};
 
 SelectStmt::~SelectStmt()
 {
@@ -39,6 +48,12 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
     return RC::INVALID_ARGUMENT;
+  }
+  //如果查询的是视图
+  for(auto it:select_sql.relations){
+    if(db->find_view(it.first.c_str()) != nullptr){
+      return create_with_view(db, select_sql, stmt);
+    }
   }
 
   // 将表和字段的信息记录到 当前查询的作用域中，包括了别名等信息，关联子查询可能会用到这些东西
@@ -495,4 +510,142 @@ RC SelectStmt::add_table_and_field_info_to_scope(Db *db, SelectSqlNode &select_s
 RC SelectStmt::replace_alias_to_real_name(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
 {
   return RC::SUCCESS;
+}
+
+RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
+  //手搓一个selectsqlnode出来
+  SelectSqlNode* new_select_sql;
+  //get View and ViewMeta
+  //这里假设一次就查一个view
+  View* view = db->find_view(select_sql.relations.begin()->first.c_str());
+  ViewMeta view_meta = view->view_meta();
+
+  /* get tables */
+  std::unordered_map<std::string, std::string> tables;
+  const std::vector<ViewFieldMeta>* view_field_metas = view_meta.field_metas();
+  for(int i = 0; i < view_meta.field_num(); i++){
+    ViewFieldMeta view_field_meta =  (*view_field_metas)[i];
+    if(tables.find(view_field_meta.field_name()) == tables.end()){
+      tables.insert({view_field_meta.field_name(), view_field_meta.field_name()});
+    }
+  }
+  new_select_sql->relations.swap(tables);
+
+  /* handle query_expressions */
+  std::vector<unique_ptr<Expression>> query_expressions;
+  get_query_expressions(view, query_expressions, select_sql.expressions);
+  new_select_sql->expressions.swap(query_expressions);
+  /* handle query_expressions */
+  
+  /* handle conditionss : 有两个条件需要处理，一个是view的，一个是select的，且都可能为空 */
+  std::vector<FilterUnit *> filter_units;
+  /* handle conditionss */
+  return RC::SUCCESS;
+}
+
+RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expression>> &query_expressions,
+                             std::vector<unique_ptr<Expression>> &true_query_expressions){
+    ViewMeta view_meta = view->view_meta();
+
+    for (unique_ptr<Expression> &expression : true_query_expressions){
+      if(expression.get()->type() == ExprType::UNBOUND_FIELD){
+        auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
+        const char* query_field_name = unbound_field_expr->field_name(); //拿个名字
+        const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+
+        if(view_field_meta->type() == ExprType::FIELD){
+          UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
+          view_field_meta->field_name(), query_field_name);
+          query_expressions.emplace_back(std::move(expr));
+        }  
+        else if(view_field_meta->type() == ExprType::ARITHMETIC){
+          BinderContext binder_context;
+          ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+          size_t pos = 0;
+          //如果表达式有多个表的字段，暂时干不了这活
+          ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+          pos, view_field_meta->table_name()));
+          expr->set_name(query_field_name);
+          query_expressions.emplace_back(std::move(expr));
+        }
+        else if(view_field_meta->type()  == ExprType::AGGREGATION){
+          if(std::string(query_field_name).find("(") != std::string::npos){
+            const char* field_name = std::string(query_field_name).substr(std::string(query_field_name).find("(") + 1,
+            std::string(query_field_name).find(")")- std::string(query_field_name).find("(") - 1).c_str();
+            UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+            UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+              std::string(query_field_name).substr(0, std::string(query_field_name).find("(")).c_str(), child
+            );
+            expr->set_name(query_field_name);
+            query_expressions.emplace_back(std::move(expr));
+          }else{
+            std::string sql_text = view_field_meta->field_name();
+            const char* field_name = sql_text.substr(sql_text.find("(")+1,
+            sql_text.find(")") - sql_text.find("(") - 1).c_str();
+            UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+            UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+              sql_text.substr(0, sql_text.find("(")).c_str(), child
+            );
+            expr->set_name(query_field_name);
+            query_expressions.emplace_back(std::move(expr));
+          }
+        }
+      }
+      else if(expression.get()->type() == ExprType::STAR){
+        for(int i = 0; i < view_meta.field_num(); i++){
+          const ViewFieldMeta *view_field_meta = view_meta.field(i);
+          const char* query_field_name = view_field_meta->name();
+          if(view_field_meta->type() == ExprType::FIELD){
+            UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
+            view_field_meta->field_name(), query_field_name);
+            query_expressions.emplace_back(std::move(expr));
+          }  
+          else if(view_field_meta->type() == ExprType::ARITHMETIC){
+            BinderContext binder_context;
+            ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+            size_t pos = 0;
+            //如果表达式有多个表的字段，暂时干不了这活
+            ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+            pos, view_field_meta->table_name()));
+            expr->set_name(query_field_name);
+            query_expressions.emplace_back(std::move(expr));
+          }
+          else if(view_field_meta->type()  == ExprType::AGGREGATION){
+            if(std::string(query_field_name).find("(") != std::string::npos){
+              const char* field_name = std::string(query_field_name).substr(std::string(query_field_name).find("(") + 1,
+              std::string(query_field_name).find(")")- std::string(query_field_name).find("(") - 1).c_str();
+              UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+              UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+                std::string(query_field_name).substr(0, std::string(query_field_name).find("(")).c_str(), child
+              );
+              expr->set_name(query_field_name);
+              query_expressions.emplace_back(std::move(expr));
+            }else{
+              std::string sql_text = view_field_meta->field_name();
+              const char* field_name = sql_text.substr(sql_text.find("(")+1,
+              sql_text.find(")") - sql_text.find("(") - 1).c_str();
+              UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+              UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+                sql_text.substr(0, sql_text.find("(")).c_str(), child
+              );
+              expr->set_name(query_field_name);
+              query_expressions.emplace_back(std::move(expr));
+            }
+          }
+        }
+      }
+    }
+  
+    return RC::SUCCESS;
+}
+
+RC get_filter_units(View *view, std::vector<ConditionSqlNode> &conditions,
+  std::vector<FilterUnit *> &filter_units){
+  const ViewMeta view_meta = view->view_meta();
+
+  for(int i = 0; i < view_meta.con_num(); i++){
+
+  }
 }

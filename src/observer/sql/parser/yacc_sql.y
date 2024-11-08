@@ -742,37 +742,54 @@ expression:
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, $3, sql_string, &@$);
     }
     | expression '+' expression ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $4);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $4);
+      //expr->set_expr(token_name(sql_string, llocp));
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '+' expression AS ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $5);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::ADD, $1, $3, $5);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '-' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::SUB, $1, $3, sql_string, &@$);
     }
     | expression '-' expression ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $4);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $4);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '-' expression AS ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $5);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::SUB, $1, $3, $5);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '*' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $1, $3, sql_string, &@$);
     }
     | expression '*' expression ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $4);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $4);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '*' expression AS ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $5);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::MUL, $1, $3, $5);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '/' expression {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::DIV, $1, $3, sql_string, &@$);
     }
     | expression '/' expression ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $4);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $4);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | expression '/' expression AS ID{
-      $$ = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $5);
+      ArithmeticExpr * expr = create_arithmetic_expression_with_alias(ArithmeticExpr::Type::DIV, $1, $3, $5);
+      expr->set_expr(sql_string);
+      $$ = expr;
     }
     | LBRACE expression RBRACE {
       $$ = $2;
@@ -829,46 +846,66 @@ expression:
       $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
     }
     | SUM LBRACE expression RBRACE ID{
-      $$ = create_aggregate_expression_with_alias("SUM", $3, $5);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("SUM", $3, $5);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | SUM LBRACE expression RBRACE AS ID{
-      $$ = create_aggregate_expression_with_alias("SUM", $3, $6);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("SUM", $3, $6);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | MAX LBRACE expression RBRACE{
       $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
     }
     | MAX LBRACE expression RBRACE ID{
-      $$ = create_aggregate_expression_with_alias("MAX", $3, $5);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("MAX", $3, $5);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | MAX LBRACE expression RBRACE AS ID{
-      $$ = create_aggregate_expression_with_alias("MAX", $3, $6);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("MAX", $3, $6);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | MIN LBRACE expression RBRACE{
       $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
     }
     | MIN LBRACE expression RBRACE ID{
-      $$ = create_aggregate_expression_with_alias("MIN", $3, $5);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("MIN", $3, $5);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | MIN LBRACE expression RBRACE AS ID{
-      $$ = create_aggregate_expression_with_alias("MIN", $3, $6);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("MIN", $3, $6);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | AVG LBRACE expression RBRACE{
       $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
     }
     | AVG LBRACE expression RBRACE ID{
-      $$ = create_aggregate_expression_with_alias("AVG", $3, $5);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("AVG", $3, $5);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | AVG LBRACE expression RBRACE AS ID{
-      $$ = create_aggregate_expression_with_alias("AVG", $3, $6);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("AVG", $3, $6);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | COUNT LBRACE expression RBRACE{
       $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
     }
     | COUNT LBRACE expression RBRACE ID{
-      $$ = create_aggregate_expression_with_alias("COUNT", $3, $5);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("COUNT", $3, $5);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | COUNT LBRACE expression RBRACE AS ID{
-      $$ = create_aggregate_expression_with_alias("COUNT", $3, $6);
+      UnboundAggregateExpr *expr = create_aggregate_expression_with_alias("COUNT", $3, $6);
+      expr->set_expr(token_name(sql_string, &@$).c_str());
+      $$ = expr; 
     }
     | SUM LBRACE expression_list RBRACE {
       $$ = create_aggregate_expression("SUM", nullptr, sql_string, &@$);

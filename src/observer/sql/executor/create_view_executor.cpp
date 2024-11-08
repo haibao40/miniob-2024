@@ -20,7 +20,7 @@ RC CreateViewExecutor::execute(SQLStageEvent *sql_event)
   CreateViewStmt *create_view_stmt = static_cast<CreateViewStmt *>(stmt);
 
   const char *view_name = create_view_stmt->view_name().c_str();
-  RC rc = session->get_current_db()->create_view(view_name, create_view_stmt->attr_infos());
+  RC rc = session->get_current_db()->create_view(view_name, create_view_stmt->con_infos(), create_view_stmt->attr_infos());
 
   return rc;
 }

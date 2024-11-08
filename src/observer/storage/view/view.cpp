@@ -26,7 +26,7 @@ View::~View()
 }
 
 RC View::create(Db *db, int32_t view_id, const char *path, const char *name, const char *base_dir,
-    span<const ViewAttrInfoSqlNode> attributes)
+    std::vector< ConditionSqlNode> conditions, span<const ViewAttrInfoSqlNode> attributes)
 {
   if (view_id < 0) {
     LOG_WARN("invalid view id. view_id=%d, view_name=%s", view_id, name);
@@ -59,10 +59,11 @@ RC View::create(Db *db, int32_t view_id, const char *path, const char *name, con
   }
 
   close(fd);
-
+  
   // 创建文件
-  if ((rc = view_meta_.init(view_id, name, attributes)) != RC::SUCCESS) {
+  if ((rc = view_meta_.init(view_id, name, conditions, attributes)) != RC::SUCCESS) {
     LOG_ERROR("Failed to init view meta. name:%s, ret:%d", name, rc);
+    drop(path);
     return rc;  // delete view file
   }
 

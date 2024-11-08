@@ -15,20 +15,22 @@
 static const Json::StaticString FIELD_VIEW_ID("view_id");
 static const Json::StaticString FIELD_VIEW_NAME("view_name");
 static const Json::StaticString FIELD_VIEW_FIELDS("view_fields");
-
+static const Json::StaticString FIELD_VIEW_CONS("view_conditions");
 ViewMeta::ViewMeta(const ViewMeta &other)
     : view_id_(other.view_id_),
       name_(other.name_),
-      view_fields_(other.view_fields_)
+      view_fields_(other.view_fields_),
+      view_cons_(other.view_cons_)
 {}
 
 void ViewMeta::swap(ViewMeta &other) noexcept
 {
   name_.swap(other.name_);
   view_fields_.swap(other.view_fields_);
+  view_cons_.swap(other.view_cons_);
 }
 
-RC ViewMeta::init(int32_t view_id, const char *name,
+RC ViewMeta::init(int32_t view_id, const char *name, std::vector<ConditionSqlNode> conditions,
                    span<const ViewAttrInfoSqlNode> attributes)
 {
   if (common::is_blank(name)) {
@@ -44,6 +46,7 @@ RC ViewMeta::init(int32_t view_id, const char *name,
   RC rc = RC::SUCCESS;
 
   view_fields_.resize(attributes.size());
+  view_cons_.resize(conditions.size());
 
   for (size_t i = 0; i < attributes.size(); i++) {
     const ViewAttrInfoSqlNode &attr_info = attributes[i];
@@ -52,6 +55,18 @@ RC ViewMeta::init(int32_t view_id, const char *name,
       attr_info.name.c_str(), attr_info.table_name.c_str(), attr_info.field_name.c_str());
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init view field meta. view name=%s, field name: %s", name, attr_info.name.c_str());
+      return rc;
+    }
+  }
+
+  for(size_t i = 0; i < conditions.size(); i++){
+    const ConditionSqlNode &con = conditions[i];
+    float left = con.left_value.get_float(), right = con.right_value.get_float();
+    rc = view_cons_[i].init( con.left_is_attr, left, con.left_attr.relation_name, con.left_attr.attribute_name,
+        con.comp, con.right_is_attr, con.right_attr.relation_name, con.right_attr.attribute_name, right
+    );
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to init view field meta. view name=%s, view con comp: %d", name, (int)con.comp);
       return rc;
     }
   }
@@ -67,6 +82,7 @@ RC ViewMeta::init(int32_t view_id, const char *name,
 const char *ViewMeta::name() const { return name_.c_str(); }
 
 const ViewFieldMeta *ViewMeta::field(int index) const { return &view_fields_[index]; }
+const ConditionMeta *ViewMeta::con(int index) const { return &view_cons_[index]; }
 const ViewFieldMeta *ViewMeta::field(const char *name) const
 {
   if (nullptr == name) {
@@ -81,6 +97,7 @@ const ViewFieldMeta *ViewMeta::field(const char *name) const
 }
 
 int ViewMeta::field_num() const { return view_fields_.size(); }
+int ViewMeta::con_num() const { return view_cons_.size(); }
 
 int ViewMeta::serialize(std::ostream &ss) const
 {
@@ -95,7 +112,16 @@ int ViewMeta::serialize(std::ostream &ss) const
     fields_value.append(std::move(field_value));
   }
 
-  view_value[FIELD_VIEW_FIELDS] = std::move(fields_value);
+  view_value[FIELD_VIEW_FIELDS] = std::move(fields_value); //
+
+  Json::Value cons_value;
+  for (const ConditionMeta &con : view_cons_) {
+    Json::Value con_value;
+    con.to_json(con_value);
+    cons_value.append(std::move(con_value));
+  }
+
+  view_value[FIELD_VIEW_CONS] = std::move(cons_value);
 
   Json::StreamWriterBuilder builder;
   Json::StreamWriter       *writer = builder.newStreamWriter();
@@ -156,6 +182,32 @@ int ViewMeta::deserialize(std::istream &is)
       return -1;
     }
   }
+  
+  const Json::Value &cons_value = view_value[FIELD_VIEW_CONS];
+  std::vector<ConditionMeta> cons;
+  
+  if(!cons_value.isNull()){
+    if (!cons_value.isArray() || cons_value.size() <= 0) {
+        LOG_ERROR("Invalid view meta. view cons is not array, json value=%s", cons_value.toStyledString().c_str());
+        return -1;
+    }
+
+    rc        = RC::SUCCESS;
+    int con_num = cons_value.size();
+
+    cons.resize(con_num);
+    for (int i = 0; i < con_num; i++) {
+        ConditionMeta &con = cons[i];
+
+        const Json::Value &con_value = cons_value[i];
+        rc                             = ConditionMeta::from_json(con_value, con);
+        if (rc != RC::SUCCESS) {
+        LOG_ERROR("Failed to deserialize view meta. view name =%s", view_name.c_str());
+        return -1;
+        }
+    }
+  }
+  
 
 //   auto comparator = [](const FieldMeta &f1, const FieldMeta &f2) { return f1.offset() < f2.offset(); };
 //   std::sort(fields.begin(), fields.end(), comparator);
@@ -163,6 +215,7 @@ int ViewMeta::deserialize(std::istream &is)
   view_id_ = view_id;
   name_.swap(view_name);
   view_fields_.swap(fields);
+  view_cons_.swap(cons);
 
   return (int)(is.tellg() - old_pos);
 }

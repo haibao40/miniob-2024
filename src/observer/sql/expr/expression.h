@@ -481,6 +481,8 @@ public:
 
   std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
+  void set_expr(const char* expr) { expr_ = expr; }
+  const char * expr() { return expr_.c_str(); }
 
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
@@ -494,7 +496,7 @@ private:
   Type                        arithmetic_type_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
-  std::string                 expr;
+  std::string                 expr_;
 };
 
 class UnboundAggregateExpr : public Expression
@@ -513,10 +515,13 @@ public:
 
   RC       get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
   AttrType value_type() const override { return child_->value_type(); }
+  void set_expr(const char * expr) { expr_ = expr; }
+  const char * expr() { return expr_.c_str(); }
 
 private:
   std::string                 aggregate_name_;
   std::unique_ptr<Expression> child_;
+  std::string                 expr_;
   std::unique_ptr<Expression> copy_child_;
 };
 
@@ -553,6 +558,8 @@ public:
   std::unique_ptr<Expression> &child() { return child_; }
 
   const std::unique_ptr<Expression> &child() const { return child_; }
+  void set_expr(const char * expr) { expr_ = expr; }
+  const char * expr() { return expr_.c_str(); }
 
   std::unique_ptr<Aggregator> create_aggregator() const;
 
@@ -562,6 +569,7 @@ public:
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
+  std::string                 expr_;
 };
 
 

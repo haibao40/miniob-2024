@@ -173,7 +173,8 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
   return RC::SUCCESS;
 }
 
-RC Db::create_view(const char *view_name, span<const ViewAttrInfoSqlNode> attributes)
+RC Db::create_view(const char *view_name, std::vector<ConditionSqlNode> conditions,
+                                          span<const ViewAttrInfoSqlNode> attributes)
 {
   RC rc = RC::SUCCESS;
   // check table_name
@@ -186,10 +187,11 @@ RC Db::create_view(const char *view_name, span<const ViewAttrInfoSqlNode> attrib
   string  view_file_path = view_meta_file(path_.c_str(), view_name);
   View  *view           = new View();
   int32_t view_id        = next_view_id_++;
-  rc = view->create(this, view_id, view_file_path.c_str(), view_name, path_.c_str(), attributes);
+  rc = view->create(this, view_id, view_file_path.c_str(), view_name, path_.c_str(), conditions ,attributes);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to create view %s.", view_name);
     delete view;
+    next_view_id_--;
     return rc;
   }
 
