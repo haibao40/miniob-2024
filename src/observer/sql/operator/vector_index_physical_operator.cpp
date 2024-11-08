@@ -21,12 +21,12 @@ using namespace std;
 RC VectorIndexPhysicalOperator::sorteTuples(){
   auto comparator = [this](const Tuple* a, const Tuple* b) {  
     Value aValue ;
-    Value bValue;
+    Value bValue ;
     TupleCellSpec * spec = new TupleCellSpec(table_->name(), field_name_.c_str());
     a->find_cell(*spec, aValue);
     b->find_cell(*spec, bValue);
-    vector<float> aVector = aValue.get_vector();
-    vector<float> bVector = bValue.get_vector();
+    const vector<float> aVector = aValue.get_vector();
+    const vector<float> bVector = bValue.get_vector();
     float af = index_->get_instance(aVector,base_vector_);
     float bf = index_->get_instance(bVector,base_vector_);
     if(af <= bf ){

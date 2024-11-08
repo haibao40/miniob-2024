@@ -207,8 +207,9 @@ RC IvfflatIndex::delete_entry(const char *record, const RID *rid){
     vector<vector<float>>* data = new vector<vector<float>>();
     vector<RID>* rids = new vector<RID>();
     for(size_t i = 0;i<records_->size();i++){
-        rids->push_back((*records_)[i]->rid());
-        vector<float> p = get_data_from_record(table_,(*records_)[i]->data(),field_meta_.name());
+        Record* record = ((*records_)[i]);
+        rids->push_back(record->rid());
+        vector<float> p = get_data_from_record(table_,record->data(),field_meta_.name());
         data->push_back(std::move(p));
     }
     rids_ = rids;

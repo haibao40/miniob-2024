@@ -552,9 +552,13 @@ RC Table::create_vector_index(Trx *trx, const vector<const FieldMeta*> *field_me
   // 遍历当前的所有数据，插入这个索引
   RecordFileScanner scanner;
   rc = get_record_scanner(scanner, trx, ReadWriteMode::READ_ONLY);
-  Record* record = new Record();
+  
   std::vector<Record *>* records_ = new std::vector<Record *>();
-  while (OB_SUCC(rc = scanner.next(*record))) {
+  while (true) {
+    Record* record = new Record();
+    if(OB_SUCC(rc = scanner.next(*record)) == false){
+      break;
+    }
     records_->push_back(record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
