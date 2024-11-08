@@ -36,7 +36,7 @@ bool compareByDifference(const KeyDifference& a, const KeyDifference& b) {
 }
 
 vector<RID>* IvfflatIndex::ann_search(const vector<float> &base_vector, size_t limit) { 
-    probes_ = data_->size() ; //开启全表扫描，将搜素簇的数量设置为系统最大
+    //probes_ = data_->size() ; //开启全表扫描，将搜素簇的数量设置为系统最大
     std::vector<KeyDifference>* differences = new std::vector<KeyDifference>() ;
     for (const auto& pair : *kmeans_) {
         float diff = get_instance(base_vector, pair.first);
