@@ -16,6 +16,10 @@ static const Json::StaticString FIELD_VIEW_ID("view_id");
 static const Json::StaticString FIELD_VIEW_NAME("view_name");
 static const Json::StaticString FIELD_VIEW_FIELDS("view_fields");
 static const Json::StaticString FIELD_VIEW_CONS("view_conditions");
+static const Json::StaticString CHILD_VIEW_FIELDS("child_conditions");
+static const Json::StaticString CHILD__VIEW_CONS("child_conditions");
+
+
 ViewMeta::ViewMeta(const ViewMeta &other)
     : view_id_(other.view_id_),
       name_(other.name_),

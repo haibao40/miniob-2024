@@ -641,6 +641,22 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             }
           }
         }
+      }else if(expression.get()->type() == ExprType::UNBOUND_AGGREGATION){
+        auto unbound_agg_expr = static_cast<UnboundAggregateExpr *>(expression.get());
+        Expression* child = nullptr;
+        if(unbound_agg_expr->child().get()->type() == ExprType::UNBOUND_FIELD){
+          auto child_expr = static_cast<UnboundFieldExpr* >(unbound_agg_expr->child().get());
+          const char* query_field_name = child_expr->field_name(); //拿个名字
+          const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+
+          child = new UnboundFieldExpr(view_field_meta->table_name(), query_field_name, query_field_name);
+          child->set_name(query_field_name);
+        }else if(unbound_agg_expr->child().get()->type() == ExprType::STAR){
+          child = new StarExpr();
+        }
+        UnboundAggregateExpr* expr = new UnboundAggregateExpr(unbound_agg_expr->aggregate_name(), child);
+        expr->set_name(unbound_agg_expr->name());
+        query_expressions.emplace_back(expr);
       }
     }
   

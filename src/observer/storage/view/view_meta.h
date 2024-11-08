@@ -60,4 +60,6 @@ protected:
   std::string            name_;
   std::vector<ViewFieldMeta> view_fields_;
   std::vector<ConditionMeta> view_cons_; 
+  std::vector<ViewFieldMeta> child_fields_;
+  std::vector<ConditionMeta> child_cons_;
 };
