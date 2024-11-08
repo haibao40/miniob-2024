@@ -87,6 +87,6 @@ public:
   static RC get_query_expressions(View *view, std::vector<unique_ptr<Expression>> &query_expressions,
                              std::vector<unique_ptr<Expression>> &true_query_expressions);
 
-  static RC get_filter_units(View *view, std::vector<ConditionSqlNode> &conditions,
-  std::vector<FilterUnit *> &filter_units);
+  static RC get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions,
+  std::vector<ConditionSqlNode> &true_conditions);
 };
