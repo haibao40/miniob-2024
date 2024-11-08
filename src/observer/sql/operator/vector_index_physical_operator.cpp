@@ -30,9 +30,9 @@ RC VectorIndexPhysicalOperator::sorteTuples(){
     float af = index_->get_instance(aVector,base_vector_);
     float bf = index_->get_instance(bVector,base_vector_);
     if(af < bf ){
-      return 1;
+      return true;
     }else{
-      return -1 ;
+      return false ;
     }
   };
   std::sort(tuples_->begin(), tuples_->end(), comparator);
@@ -75,6 +75,7 @@ RC VectorIndexPhysicalOperator::open(Trx *trx)
    Tuple* tuple  = get_data_from_record(table_,record);
    tuples_->push_back(tuple);
   }
+  sorteTuples();
   delete records_;
   return RC::SUCCESS;
 }

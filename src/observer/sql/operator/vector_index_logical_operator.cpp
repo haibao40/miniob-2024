@@ -37,15 +37,18 @@ VectorIndexLogicalOperator::VectorIndexLogicalOperator(Table *table, ReadWriteMo
             index_name_p_ = field_temp->field_name();
             Value value_ ;
             value_temp->get_value(value_);
-            value_.get_vector();
-            base_vector_ = value_.get_vector();
+            Value value_vector ;
+            value_.cast_to(value_,AttrType::VECTORS,value_vector);
+            base_vector_ = value_vector.get_vector();
        }else if(left->type()==ExprType::VALUE && right->type()==ExprType::FIELD){
             FieldExpr* field_temp = static_cast<FieldExpr*>(right);
             ValueExpr* value_temp = static_cast<ValueExpr*>(left);
             index_name_p_ = field_temp->field_name();
             Value value_ ;
             value_temp->get_value(value_);
-            base_vector_ = value_.get_vector();
+            Value value_vector ;
+            value_.cast_to(value_,AttrType::VECTORS,value_vector);
+            base_vector_ = value_vector.get_vector();
        }else{
         distance_type_ = -1 ;
         limit_ = -1 ;
