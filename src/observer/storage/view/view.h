@@ -49,6 +49,7 @@ public:
 
   //检查该视图能否更新
   bool update_capacity();
+  bool insert_capacity();
 
 public:
   int32_t     view_id() const { return view_meta_.view_id(); }

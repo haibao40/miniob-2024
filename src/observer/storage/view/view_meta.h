@@ -55,6 +55,9 @@ public:
   void to_string(std::string &output) const override;
   void desc(std::ostream &os) const;
 
+public:
+  bool insert_capacity();
+
 protected:
   int32_t                view_id_ = -1;
   std::string            name_;

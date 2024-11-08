@@ -227,3 +227,18 @@ int ViewMeta::deserialize(std::istream &is)
 int ViewMeta::get_serial_size() const { return -1; }
 
 void ViewMeta::to_string(std::string &output) const {}
+
+bool ViewMeta::insert_capacity(){
+    bool res = true;
+    if(view_fields_.size() <= 1){
+        return true;
+    }
+    const char* table_name = view_fields_[0].table_name();
+    for(size_t i = 1; i < view_fields_.size(); i++){
+        if(strcasecmp(table_name, view_fields_[i].table_name()) != 0){
+            res = false;
+            break;
+        }
+    }
+    return res;
+}

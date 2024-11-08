@@ -144,3 +144,5 @@ bool View::update_capacity(){
     }
     return res;
 }
+
+bool View::insert_capacity() { return view_meta_.insert_capacity(); }

@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "storage/view/view.h"
 
 InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
     : table_(table), values_(values), value_amount_(value_amount)
@@ -28,6 +29,14 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     LOG_WARN("invalid argument. db=%p, table_name=%p, value_num=%d",
         db, table_name, static_cast<int>(inserts.values.size()));
     return RC::INVALID_ARGUMENT;
+  }
+
+  if(db->find_view(inserts.relation_name.c_str()) != nullptr){
+    View* view = db->find_view(inserts.relation_name.c_str());
+    if(!view->insert_capacity()){
+      return RC::UNSUPPORTED;
+    }
+    table_name = view->view_meta().field(0)->table_name();
   }
 
   // check whether the table exists
