@@ -356,6 +356,29 @@ bool ViewMeta::insert_capacity(){
     return res;
 }
 
+bool ViewMeta::insert_capacity(std::vector<std::string> field_names){
+    bool res = true;
+    if(field_names.size() == 1 && field(field_names[0].c_str()) != nullptr
+    && field(field_names[0].c_str())->type() == ExprType::FIELD){
+        return true;
+    }
+    if(field(field_names[0].c_str()) == nullptr ||
+    field(field_names[0].c_str())->type() != ExprType::FIELD){
+        return false;
+    }
+
+    const char *table_name = field(field_names[0].c_str())->table_name();
+    for(size_t i = 0 ; i < field_names.size(); i++){
+        const ViewFieldMeta* field_meta = field(field_names[i].c_str());
+        if(field_meta == nullptr || strcasecmp(table_name, field_meta->table_name()) != 0 
+        || field_meta->type() != ExprType::FIELD){
+            res = false;
+            break;
+        }
+    }
+    return res;
+}
+
 bool ViewMeta::delete_capacity(){
     bool res = true;
     if(view_fields_.size() <= 1){

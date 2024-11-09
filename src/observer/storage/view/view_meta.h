@@ -66,6 +66,7 @@ public:
 
 public:
   bool insert_capacity();
+  bool insert_capacity(std::vector<std::string> field_names);
   bool update_capacity(const std::vector<UpdateUnite>& update_units);
   bool delete_capacity();
 

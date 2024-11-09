@@ -537,6 +537,26 @@ insert_stmt:        /*insert   语句的语法解析树*/
       delete $6;
       free($3);
     }
+    | INSERT INTO ID LBRACE ID attr_name_list RBRACE VALUES LBRACE value value_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_INSERT);
+      $$->insertion.relation_name = $3;
+
+      std::vector<std::string> *p = $6;
+      p->push_back($5);
+
+      $$->insertion.attr_names.swap(*p);
+      std::reverse($$->insertion.attr_names.begin(), $$->insertion.attr_names.end());
+
+      if ($11 != nullptr) {
+        $$->insertion.values.swap(*$11);
+        delete $11;
+      }
+      $$->insertion.values.emplace_back(*$10);
+      std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
+      delete $10;
+      free($3);
+    }
     ;
 
 value_list:

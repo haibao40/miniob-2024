@@ -34,10 +34,18 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
 
   if(db->find_view(inserts.relation_name.c_str()) != nullptr){
     View* view = db->find_view(inserts.relation_name.c_str());
-    if(!view->insert_capacity()){
-      return RC::UNSUPPORTED;
+
+    if(inserts.attr_names.size() > 0){
+      if(!view->insert_capacity(inserts.attr_names)){
+        return RC::UNSUPPORTED;
+      }
+      table_name = view->view_meta().field(inserts.attr_names[0].c_str())->table_name();
+    }else{
+      if(!view->insert_capacity()){
+        return RC::UNSUPPORTED;
+      }
+      table_name = view->view_meta().field(0)->table_name();
     }
-    table_name = view->view_meta().field(0)->table_name();
   }
 
   // check whether the table exists
