@@ -597,7 +597,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
           if(std::string(query_field_name).find("(") != std::string::npos){
             const char* field_name = std::string(query_field_name).substr(std::string(query_field_name).find("(") + 1,
             std::string(query_field_name).find(")")- std::string(query_field_name).find("(") - 1).c_str();
-            UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+            UnboundFieldExpr* child = new UnboundFieldExpr(view_field_meta->table_name(), field_name);
             UnboundAggregateExpr* expr = new UnboundAggregateExpr(
               std::string(query_field_name).substr(0, std::string(query_field_name).find("(")).c_str(), child
             );
@@ -605,9 +605,14 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             query_expressions.emplace_back(std::move(expr));
           }else{
             std::string sql_text = view_field_meta->field_name();
-            const char* field_name = sql_text.substr(sql_text.find("(")+1,
-            sql_text.find(")") - sql_text.find("(") - 1).c_str();
-            UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+            // const char* field_name = sql_text.substr(sql_text.find("(")+1,
+            // sql_text.find(")") - sql_text.find("(") - 1).c_str();
+            int lpos = sql_text.find("("), rpos = sql_text.find(")");
+            char* p = (char *)malloc((rpos - lpos)*sizeof(char));
+            memcpy(p, view_field_meta->field_name() + lpos + 1, rpos - lpos - 1);
+            p[rpos - lpos - 1] = '\0';
+            const char* table_name = view_field_meta->table_name();
+            UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p, p);
             UnboundAggregateExpr* expr = new UnboundAggregateExpr(
               sql_text.substr(0, sql_text.find("(")).c_str(), child
             );
