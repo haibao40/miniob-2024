@@ -121,18 +121,24 @@ extern int yydebug;
     JOIN = 322,                    /* JOIN  */
     AS = 323,                      /* AS  */
     UNIQUE = 324,                  /* UNIQUE  */
-    LEFT_BRACKET = 325,            /* LEFT_BRACKET  */
-    RIGHT_BRACKET = 326,           /* RIGHT_BRACKET  */
-    L2_DISTANCE = 327,             /* L2_DISTANCE  */
-    COSINE_DISTANCE = 328,         /* COSINE_DISTANCE  */
-    INNER_PRODUCT = 329,           /* INNER_PRODUCT  */
-    IN_T = 330,                    /* IN_T  */
-    EXISTS_T = 331,                /* EXISTS_T  */
-    NUMBER = 332,                  /* NUMBER  */
-    FLOAT = 333,                   /* FLOAT  */
-    ID = 334,                      /* ID  */
-    SSS = 335,                     /* SSS  */
-    UMINUS = 336                   /* UMINUS  */
+    WITH = 325,                    /* WITH  */
+    DISTANCE = 326,                /* DISTANCE  */
+    TYPE = 327,                    /* TYPE  */
+    LISTS = 328,                   /* LISTS  */
+    PROBES = 329,                  /* PROBES  */
+    LIMIT = 330,                   /* LIMIT  */
+    LEFT_BRACKET = 331,            /* LEFT_BRACKET  */
+    RIGHT_BRACKET = 332,           /* RIGHT_BRACKET  */
+    L2_DISTANCE = 333,             /* L2_DISTANCE  */
+    COSINE_DISTANCE = 334,         /* COSINE_DISTANCE  */
+    INNER_PRODUCT = 335,           /* INNER_PRODUCT  */
+    IN_T = 336,                    /* IN_T  */
+    EXISTS_T = 337,                /* EXISTS_T  */
+    NUMBER = 338,                  /* NUMBER  */
+    FLOAT = 339,                   /* FLOAT  */
+    ID = 340,                      /* ID  */
+    SSS = 341,                     /* SSS  */
+    UMINUS = 342                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -141,7 +147,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 185 "yacc_sql.y"
+#line 191 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -165,7 +171,7 @@ union YYSTYPE
   float                                      floats;
   bool                                       bools;
 
-#line 169 "yacc_sql.hpp"
+#line 175 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
