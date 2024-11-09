@@ -34,20 +34,29 @@ public:
   RC init(int32_t view_id, const char *name, std::span<const ViewAttrInfoSqlNode> attributes);
   RC init(int32_t view_id, const char *name, std::vector<ConditionSqlNode> conditions,
                                              std::span<const ViewAttrInfoSqlNode> attributes);
+  RC init(int32_t view_id, const char *name, std::vector<ConditionSqlNode> conditions, 
+  std::vector<ConditionSqlNode> child_conditions,  std::vector<ViewAttrInfoSqlNode> child_attributes,
+                                    std::span<const ViewAttrInfoSqlNode> attributes);
 
 public:
   int32_t             view_id() const { return view_id_; }
   const char         *name() const;
   const ViewFieldMeta    *field(int index) const;
   const ViewFieldMeta    *field(const char *name) const;
+  const ViewFieldMeta    *child_field(int index) const;
+  const ViewFieldMeta    *child_field(const char *name) const;
   const ConditionMeta      *con(int index) const;
+  const ConditionMeta    *child_con(int index) const;
 
   auto                field_metas() const -> const std::vector<ViewFieldMeta>                *{ return &view_fields_; }
   auto                  con_metas() const -> const std::vector<ConditionMeta>                *{ return &view_cons_; }
+  auto          child_field_metas() const -> const std::vector<ViewFieldMeta>                *{ return &child_fields_; }
+  auto            child_con_metas() const -> const std::vector<ConditionMeta>                *{ return &child_cons_; }
 
-  int field_num() const;  
-  int con_num() const;
-
+  int       field_num() const;  
+  int         con_num() const;
+  int child_field_num() const;  
+  int   child_con_num() const;
 public:
   int  serialize(std::ostream &os) const override;
   int  deserialize(std::istream &is) override;

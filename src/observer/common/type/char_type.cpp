@@ -109,7 +109,7 @@ int CharType::cast_cost(AttrType type)
   else if(type == AttrType::DATES) {
     return 1;
   }else if(type == AttrType::INTS || type == AttrType::FLOATS){ //表示可以将字符串转化为int 转化的代价为1
-    return 1 ;
+    return 59;
   }
   //表示可以将字符串类型转换为向量类型，类型转换的代价为1
   else if(type == AttrType::VECTORS) {

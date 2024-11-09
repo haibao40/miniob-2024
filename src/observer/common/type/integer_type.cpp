@@ -92,7 +92,7 @@ int IntegerType::cast_cost(AttrType type)
     return 1;
   }
   else if(type == AttrType::CHARS) {
-    return 3;
+    return 60;
   }
   return INT32_MAX;
 }

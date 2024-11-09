@@ -33,6 +33,8 @@ public:
   const std::string                  &view_name() const { return view_name_; }
   const std::vector<ViewAttrInfoSqlNode> &attr_infos() const { return view_attr_infos_; }
   const std::vector<ConditionSqlNode> &con_infos() const { return view_con_infos_; }
+  const std::vector<ViewAttrInfoSqlNode> &child_attr_infos() const { return child_attr_infos_; }
+  const std::vector<ConditionSqlNode> &child_con_infos() const { return child_con_infos_; }
 
   static RC            create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt);
   static RC get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_expressions, std::vector<ViewAttrInfoSqlNode>& attr_infos);
@@ -42,5 +44,7 @@ private:
   std::string                  view_name_;
   std::vector<ViewAttrInfoSqlNode> view_attr_infos_;
   std::vector<ConditionSqlNode> view_con_infos_;
+  std::vector<ViewAttrInfoSqlNode> child_attr_infos_;
+  std::vector<ConditionSqlNode> child_con_infos_;
 //   SelectStmt      *select_stmt_ = nullptr;
 };

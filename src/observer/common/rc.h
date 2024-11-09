@@ -87,7 +87,8 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(SCHEMA_VIEW_NOT_EXIST)      \
   DEFINE_RC(PAGE_NOT_OPEN)              \
   DEFINE_RC(PART_OF_RECORD)             \
-  DEFINE_RC(UNSUPPORTED)
+  DEFINE_RC(UNSUPPORTED)                \
+  DEFINE_RC(VIEW_WITH_CHILD)     
 
 enum class RC
 {

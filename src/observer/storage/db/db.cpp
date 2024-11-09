@@ -200,6 +200,35 @@ RC Db::create_view(const char *view_name, std::vector<ConditionSqlNode> conditio
   return RC::SUCCESS;
 }
 
+RC Db::create_view(const char *view_name, std::vector<ConditionSqlNode> conditions,
+  std::vector<ConditionSqlNode> child_conditions, std::vector<ViewAttrInfoSqlNode> child_attributes,                                 
+  span<const ViewAttrInfoSqlNode> attributes)
+{
+  RC rc = RC::SUCCESS;
+  // check table_name
+  if (opened_tables_.count(view_name) != 0) {
+    LOG_WARN("%s has been opened before.", view_name);
+    return RC::SCHEMA_VIEW_EXIST;
+  }
+
+  // 文件路径可以移到view模块
+  string  view_file_path = view_meta_file(path_.c_str(), view_name);
+  View  *view           = new View();
+  int32_t view_id        = next_view_id_++;
+  rc = view->create(this, view_id, view_file_path.c_str(), view_name, path_.c_str(), conditions ,
+  child_conditions, child_attributes, attributes);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to create view %s.", view_name);
+    delete view;
+    next_view_id_--;
+    return rc;
+  }
+
+  opened_views_[view_name] = view;
+  LOG_INFO("Create view success. view name=%s, view_id:%d", view_name, view_id);
+  return RC::SUCCESS;
+}
+
 RC Db::drop_table(const char *table_name)
 {
   RC rc = RC::SUCCESS;

@@ -69,6 +69,9 @@ public:
   RC create_view(const char *view_name, span<const ViewAttrInfoSqlNode> attributes);
   RC create_view(const char *view_name, std::vector<ConditionSqlNode> conditions,
                                         span<const ViewAttrInfoSqlNode> attributes);
+  RC create_view(const char *view_name, std::vector<ConditionSqlNode> conditions,
+  std::vector<ConditionSqlNode> child_conditions, std::vector<ViewAttrInfoSqlNode> child_attributes,                                    
+  span<const ViewAttrInfoSqlNode> attributes);
 
   
 

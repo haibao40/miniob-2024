@@ -261,6 +261,21 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     return RC::INVALID_ARGUMENT;
   }
 
+  // 将表和字段的信息记录到 当前查询的作用域中，包括了别名等信息，关联子查询可能会用到这些东西
+  SelectStmt *select_stmt = new SelectStmt();
+  select_stmt->scope_ = new HierarchicalScope(); 
+  //如果是子查询，parent会指向上一级查询，如果是最外层查询，parent会指向空指针nullptr
+  select_stmt->parent_ = GlobalVariable::curren_resolve_select_stmt;
+  if(GlobalVariable::curren_resolve_select_stmt != nullptr) {
+    select_stmt->scope_->parent = GlobalVariable::curren_resolve_select_stmt->scope_;
+  }
+  // 将表和字段的信息记录到 当前查询的作用域中，包括了别名等信息，关联子查询可能会用到这些东西
+  RC rc = SelectStmt::add_table_and_field_info_to_scope(db,select_sql, select_stmt);
+  if(rc != RC::SUCCESS) {
+    return rc;
+  }
+  GlobalVariable::curren_resolve_select_stmt = select_stmt;   //在全局变量中，记录当前的select_stmt，以便在解析子查询时使用
+
   BinderContext binder_context;
 
   // collect tables in `from` statement
@@ -387,7 +402,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
 
   // create filter statement in `where` statement
   FilterStmt *filter_stmt = nullptr;
-  RC          rc          = FilterStmt::create(db,
+  rc          = FilterStmt::create(db,
       default_table,
       &table_map,
       select_sql.conditions.data(),
@@ -430,7 +445,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
   }
 
   // everything alright
-  SelectStmt *select_stmt = new SelectStmt();
 
   select_stmt->tables_.swap(tables);
   select_stmt->query_expressions_.swap(bound_expressions);
@@ -441,6 +455,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
   select_stmt->order_by_.swap(order_by_expressions);
   select_stmt->join_filter_.swap(join_filter);
   stmt                      = select_stmt;
+  GlobalVariable::curren_resolve_select_stmt = select_stmt->parent_;   //回溯,因为可能存在一个外层查询有多个子查询的情况
   return RC::SUCCESS;
 }
 

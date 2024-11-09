@@ -39,10 +39,29 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
 
   std::vector<ConditionSqlNode> view_con_infos;
   vector<FilterUnit *> filter_units = select_stmt->filter_stmt()->filter_units();
-  CreateViewStmt::get_con_infos(db, filter_units, view_con_infos);
+  rc = CreateViewStmt::get_con_infos(db, filter_units, view_con_infos);
+  if(rc != RC::SUCCESS && rc != RC::VIEW_WITH_CHILD) return rc;
   
+  std::vector<ViewAttrInfoSqlNode> child_attr_infos;
+  std::vector<ConditionSqlNode> child_con_infos;
+
+  if(rc == RC::VIEW_WITH_CHILD) //存在子查询的情况下
+  {
+    FilterUnit *filter_unit = filter_units[0];
+    SubqueryExpr* expr = static_cast<SubqueryExpr *>(filter_unit->right().expr.get());
+    SelectStmt *child_select_stmt = expr->select_stmt();
+
+    vector<unique_ptr<Expression>> &child_query_expressions = child_select_stmt->query_expressions();
+    CreateViewStmt::get_attr_infos(db, child_query_expressions, child_attr_infos);
+
+    vector<FilterUnit *> child_filter_units = child_select_stmt->filter_stmt()->filter_units();
+    rc = CreateViewStmt::get_con_infos(db, child_filter_units, child_con_infos);
+  }
+
   create_view_stmt->view_attr_infos_.swap(view_attr_infos);
   create_view_stmt->view_con_infos_.swap(view_con_infos);
+  create_view_stmt->child_attr_infos_.swap(child_attr_infos);
+  create_view_stmt->child_con_infos_.swap(child_con_infos);
 
   stmt = create_view_stmt;
   if(select_stmt != nullptr){
@@ -109,6 +128,7 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
 }
 
 RC CreateViewStmt::get_con_infos(Db *db, std::vector<FilterUnit *> &filter_units, std::vector<ConditionSqlNode> &con_infos){
+  bool has_sub_query = false;
   for(size_t i = 0; i < filter_units.size(); i++){
     FilterUnit *filter_unit = filter_units[i];
     Expression* left  = filter_unit->left().expr.get();
@@ -154,8 +174,14 @@ RC CreateViewStmt::get_con_infos(Db *db, std::vector<FilterUnit *> &filter_units
       // ValueExpr *value_expr = new ValueExpr(value);
       condition.right_value = value;
     }
+    else if(right->type() == ExprType::SUBQUERY){
+      has_sub_query =  true;
+    }
 
     con_infos.push_back(condition);
+  }
+  if(has_sub_query){
+    return RC::VIEW_WITH_CHILD;
   }
   return RC::SUCCESS;
 }

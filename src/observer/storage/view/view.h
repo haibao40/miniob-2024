@@ -34,6 +34,9 @@ public:
       span<const ViewAttrInfoSqlNode> attributes);
   RC create(Db *db, int32_t view_id, const char *path, const char *name, const char *base_dir,
       std::vector<ConditionSqlNode> conditions, span<const ViewAttrInfoSqlNode> attributes);
+  RC create(Db *db, int32_t view_id, const char *path, const char *name, const char *base_dir,
+      std::vector<ConditionSqlNode> conditions, std::vector<ConditionSqlNode> child_conditions,
+      std::vector<ViewAttrInfoSqlNode> child_attributes, span<const ViewAttrInfoSqlNode> attributes);
 
   /**
    * 删除一个视图

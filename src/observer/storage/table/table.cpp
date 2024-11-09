@@ -398,6 +398,10 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
     if (field->type() != value.attr_type() && value.attr_type() != AttrType::NULLS) { //只有类型不一致，且提供的不是null值，才进行类型转换
+      if(DataType::type_instance(value.attr_type())->cast_cost(field->type()) > 50){
+        rc = RC::UNSUPPORTED;
+        break;
+      }
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {

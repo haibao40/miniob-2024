@@ -16,15 +16,17 @@ static const Json::StaticString FIELD_VIEW_ID("view_id");
 static const Json::StaticString FIELD_VIEW_NAME("view_name");
 static const Json::StaticString FIELD_VIEW_FIELDS("view_fields");
 static const Json::StaticString FIELD_VIEW_CONS("view_conditions");
-static const Json::StaticString CHILD_VIEW_FIELDS("child_conditions");
-static const Json::StaticString CHILD__VIEW_CONS("child_conditions");
+static const Json::StaticString CHILD_VIEW_FIELDS("child_fields");
+static const Json::StaticString CHILD_VIEW_CONS("child_conditions");
 
 
 ViewMeta::ViewMeta(const ViewMeta &other)
     : view_id_(other.view_id_),
       name_(other.name_),
       view_fields_(other.view_fields_),
-      view_cons_(other.view_cons_)
+      view_cons_(other.view_cons_),
+      child_fields_(other.child_fields_),
+      child_cons_(other.child_cons_)
 {}
 
 void ViewMeta::swap(ViewMeta &other) noexcept
@@ -32,6 +34,8 @@ void ViewMeta::swap(ViewMeta &other) noexcept
   name_.swap(other.name_);
   view_fields_.swap(other.view_fields_);
   view_cons_.swap(other.view_cons_);
+  child_fields_.swap(other.child_fields_);
+  child_cons_.swap(other.child_cons_);
 }
 
 RC ViewMeta::init(int32_t view_id, const char *name, std::vector<ConditionSqlNode> conditions,
@@ -82,11 +86,86 @@ RC ViewMeta::init(int32_t view_id, const char *name, std::vector<ConditionSqlNod
   return RC::SUCCESS;
 }
 
+RC ViewMeta::init(int32_t view_id, const char *name, std::vector<ConditionSqlNode> conditions,
+std::vector<ConditionSqlNode> child_conditions,  std::vector<ViewAttrInfoSqlNode> child_attributes,
+                   span<const ViewAttrInfoSqlNode> attributes)
+{
+  if (common::is_blank(name)) {
+    LOG_ERROR("Name cannot be empty");
+    return RC::INVALID_ARGUMENT;
+  }
+
+  if (attributes.size() == 0) {
+    LOG_ERROR("Invalid argument. name=%s, field_num=%d", name, attributes.size());
+    return RC::INVALID_ARGUMENT;
+  }
+
+  RC rc = RC::SUCCESS;
+
+  view_fields_.resize(attributes.size());
+  view_cons_.resize(conditions.size());
+  child_fields_.resize(child_attributes.size());
+  child_cons_.resize(child_conditions.size());
+
+  for (size_t i = 0; i < attributes.size(); i++) {
+    const ViewAttrInfoSqlNode &attr_info = attributes[i];
+    // `i` is the col_id of fields[i]
+    rc = view_fields_[i].init(attr_info.expr_type,
+      attr_info.name.c_str(), attr_info.table_name.c_str(), attr_info.field_name.c_str());
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to init view field meta. view name=%s, field name: %s", name, attr_info.name.c_str());
+      return rc;
+    }
+  }
+
+  for(size_t i = 0; i < conditions.size(); i++){
+    const ConditionSqlNode &con = conditions[i];
+    float left = con.left_value.get_float(), right = con.right_value.get_float();
+    rc = view_cons_[i].init( con.left_is_attr, left, con.left_attr.relation_name, con.left_attr.attribute_name,
+        con.comp, con.right_is_attr, con.right_attr.relation_name, con.right_attr.attribute_name, right
+    );
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to init view field meta. view name=%s, view con comp: %d", name, (int)con.comp);
+      return rc;
+    }
+  }
+
+  for (size_t i = 0; i < child_attributes.size(); i++) {
+    const ViewAttrInfoSqlNode &attr_info = child_attributes[i];
+    // `i` is the col_id of fields[i]
+    rc = child_fields_[i].init(attr_info.expr_type,
+      attr_info.name.c_str(), attr_info.table_name.c_str(), attr_info.field_name.c_str());
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to init child field meta. view name=%s, child field name: %s", name, attr_info.name.c_str());
+      return rc;
+    }
+  }
+
+  for(size_t i = 0; i < child_conditions.size(); i++){
+    const ConditionSqlNode &con = child_conditions[i];
+    float left = con.left_value.get_float(), right = con.right_value.get_float();
+    rc = child_cons_[i].init( con.left_is_attr, left, con.left_attr.relation_name, con.left_attr.attribute_name,
+        con.comp, con.right_is_attr, con.right_attr.relation_name, con.right_attr.attribute_name, right
+    );
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to init child condition meta. view name=%s, child view con comp: %d", name, (int)con.comp);
+      return rc;
+    }
+  }
+
+  view_id_ = view_id;
+  name_     = name;
+//   storage_format_ = storage_format;
+  LOG_INFO("Sussessfully initialized view meta. view id=%d, name=%s", view_id, name);
+  return RC::SUCCESS;
+}
 
 const char *ViewMeta::name() const { return name_.c_str(); }
 
 const ViewFieldMeta *ViewMeta::field(int index) const { return &view_fields_[index]; }
+const ViewFieldMeta *ViewMeta::child_field(int index) const { return &child_fields_[index]; }
 const ConditionMeta *ViewMeta::con(int index) const { return &view_cons_[index]; }
+const ConditionMeta *ViewMeta::child_con(int index) const { return &child_cons_[index]; }
 const ViewFieldMeta *ViewMeta::field(const char *name) const
 {
   if (nullptr == name) {
@@ -99,9 +178,23 @@ const ViewFieldMeta *ViewMeta::field(const char *name) const
   }
   return nullptr;
 }
+const ViewFieldMeta *ViewMeta::child_field(const char *name) const
+{
+  if (nullptr == name) {
+    return nullptr;
+  }
+  for (const ViewFieldMeta &field : child_fields_) {
+    if (0 == strcmp(field.name(), name)) {
+      return &field;
+    }
+  }
+  return nullptr;
+}
 
 int ViewMeta::field_num() const { return view_fields_.size(); }
 int ViewMeta::con_num() const { return view_cons_.size(); }
+int ViewMeta::child_field_num() const { return child_fields_.size(); }
+int ViewMeta::child_con_num() const { return child_cons_.size(); }
 
 int ViewMeta::serialize(std::ostream &ss) const
 {
@@ -126,6 +219,26 @@ int ViewMeta::serialize(std::ostream &ss) const
   }
 
   view_value[FIELD_VIEW_CONS] = std::move(cons_value);
+
+//   static const Json::StaticString CHILD_VIEW_FIELDS("child_conditions");
+//   static const Json::StaticString CHILD__VIEW_CONS("child_conditions");
+  Json::Value child_fields_value;
+  for (const ViewFieldMeta &field : child_fields_) {
+    Json::Value field_value;
+    field.to_json(field_value);
+    child_fields_value.append(std::move(field_value));
+  }
+
+  view_value[CHILD_VIEW_FIELDS] = std::move(child_fields_value); //
+
+  Json::Value child_cons_value;
+  for (const ConditionMeta &con : child_cons_) {
+    Json::Value con_value;
+    con.to_json(con_value);
+    child_cons_value.append(std::move(con_value));
+  }
+
+  view_value[CHILD_VIEW_CONS] = std::move(child_cons_value);
 
   Json::StreamWriterBuilder builder;
   Json::StreamWriter       *writer = builder.newStreamWriter();
