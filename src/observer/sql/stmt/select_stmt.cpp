@@ -700,7 +700,7 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
   }
 
   for(int i = 0; i < true_conditions.size(); i++){
-    ConditionSqlNode condition = conditions[i];
+    ConditionSqlNode condition = true_conditions[i];
     condition.left_is_expr = 1;
 
     if(condition.left_is_attr){

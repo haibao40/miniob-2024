@@ -57,6 +57,7 @@ public:
 
 public:
   bool insert_capacity();
+  bool update_capacity(const std::vector<UpdateUnite>& update_units);
 
 protected:
   int32_t                view_id_ = -1;

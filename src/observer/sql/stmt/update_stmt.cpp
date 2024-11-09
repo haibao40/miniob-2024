@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "storage/view/view.h"
+#include "sql/parser/expression_binder.h"
 #include <vector>
 #include "common/global_variable.h"
 
@@ -29,6 +31,14 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 {
   //确定更新的表是否存在
   const char* table_name = update.table_name.c_str();
+  View *view = db->find_view(table_name);
+  if(view != nullptr){
+    if(!view->update_capacity(update.update_unites)){
+      return RC::UNSUPPORTED;
+    }
+    return create_with_view(db, view, update, stmt);
+  }
+
   Table *table = db->find_table(table_name);
   if (nullptr == table) {
     LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
@@ -77,5 +87,121 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 
   stmt = new UpdateStmt(table, update.update_unites , filter_stmt);
   
+  return RC::SUCCESS;
+}
+
+RC UpdateStmt::create_with_view(Db *db, View* view, UpdateSqlNode &update_sql, Stmt *&stmt){
+  ViewMeta view_meta = view->view_meta();
+  //replace table_name and field_name
+  for(size_t i = 0; i < update_sql.update_unites.size(); i++){
+    UpdateUnite& update_unite = update_sql.update_unites[i];
+    const ViewFieldMeta* view_field_meta = view_meta.field(update_unite.field_name.c_str());
+    update_unite.field_name = view_field_meta->field_name();
+  }
+
+  if(view_meta.field_num() < 1){
+    return RC::UNSUPPORTED;
+  }
+  update_sql.table_name = view_meta.field(0)->table_name();
+
+  //add conditions
+  std::vector<ConditionSqlNode> conditions;
+  get_conditions(db, view, conditions, update_sql.conditions);
+  update_sql.conditions.swap(conditions);
+
+  return create(db, update_sql, stmt);
+}
+
+//从select里copy过来的，本来应该单独做成一个工具类里的函数了，但是赶ddl，算了
+RC UpdateStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions,
+  std::vector<ConditionSqlNode> &true_conditions){
+  const ViewMeta view_meta = view->view_meta();
+
+  for(int i = 0; i < view_meta.con_num(); i++){
+    const ConditionMeta *view_con_meta = view_meta.con(i);
+    ConditionSqlNode condition;
+    condition.comp = view_con_meta->comp();
+    condition.left_is_expr = 1;
+    condition.right_is_expr = 1;
+
+    //将左表达式初始化过滤单元
+    if(view_con_meta->left_is_attr()){
+      Table* table = db->find_table(view_con_meta->left_table_name());
+      const FieldMeta* field_meta = table->table_meta().field(view_con_meta->left_field_name());
+      FieldExpr* expr = new FieldExpr(table, field_meta);
+      condition.left_expr = expr;
+    }else{
+      ValueExpr* expr = new ValueExpr(Value(view_con_meta->left_value()));
+      condition.left_expr = expr;
+    }
+
+    //将右表达式初始化过滤单元
+    if(view_con_meta->right_is_attr()){
+      Table* table = db->find_table(view_con_meta->right_table_name());
+      const FieldMeta* field_meta = table->table_meta().field(view_con_meta->right_field_name());
+      FieldExpr* expr = new FieldExpr(table, field_meta);
+      condition.right_expr = expr;
+    }else{
+      ValueExpr* expr = new ValueExpr(Value(view_con_meta->right_value()));
+      condition.right_expr = expr;
+    }
+
+    conditions.emplace_back(condition);
+  }
+
+  for(int i = 0; i < true_conditions.size(); i++){
+    ConditionSqlNode condition = true_conditions[i];
+    condition.left_is_expr = 1;
+
+    if(condition.left_is_attr){
+      const char* query_field_name = condition.left_attr.attribute_name.c_str(); //拿个名字
+      const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+
+      if(view_field_meta->type() == ExprType::FIELD){
+        UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
+        view_field_meta->field_name(), query_field_name);
+        expr->set_name(query_field_name);
+        condition.left_expr = expr;
+      }  //算术表达式绑定不了
+      else if(view_field_meta->type() == ExprType::ARITHMETIC){
+        BinderContext binder_context;
+        ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+        size_t pos = 0;
+        //如果表达式有多个表的字段，暂时干不了这活
+        ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+        pos, view_field_meta->table_name()));
+        expr->set_name(query_field_name);
+        condition.left_expr = expr;
+      }
+    }else{
+      condition.left_expr = new ValueExpr(condition.left_value);
+    }
+
+    if(condition.right_expr->type() == ExprType::UNBOUND_FIELD){
+      UnboundFieldExpr* unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
+      const char* query_field_name = unbound_field_expr->field_name() ; //拿个名字
+      const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+
+      if(view_field_meta->type() == ExprType::FIELD){
+        UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
+        view_field_meta->field_name(), query_field_name);
+        expr->set_name(query_field_name);
+        condition.right_expr = expr;
+      }  //算术表达式绑定不了
+      else if(view_field_meta->type() == ExprType::ARITHMETIC){
+        BinderContext binder_context;
+        ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+        size_t pos = 0;
+        //如果表达式有多个表的字段，暂时干不了这活
+        ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+        pos, view_field_meta->table_name()));
+        expr->set_name(query_field_name);
+        condition.right_expr = expr;
+      }
+    }
+    conditions.emplace_back(condition);
+  }
   return RC::SUCCESS;
 }

@@ -242,3 +242,16 @@ bool ViewMeta::insert_capacity(){
     }
     return res;
 }
+
+bool ViewMeta::update_capacity(const std::vector<UpdateUnite>& update_units){
+    bool res = true;
+    for(auto update_unit:update_units){
+        std::string field_name = update_unit.field_name;
+        const ViewFieldMeta* view_field_meta = field(field_name.c_str());
+        if(view_field_meta == nullptr || view_field_meta->type() != ExprType::FIELD){
+            res = false;
+            break;
+        }
+    }
+    return res;
+}

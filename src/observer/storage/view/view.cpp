@@ -130,19 +130,6 @@ RC View::sync()
   return rc;
 }
 
-bool View::update_capacity(){
-    if(view_meta_.field_num() <= 1){
-        return true;
-    }
-    bool res = true;
-    const char* name = view_meta_.field_metas()->at(0).table_name();
-    for(const ViewFieldMeta &fieldmeta:*view_meta_.field_metas()){
-        if(strcmp(name, fieldmeta.table_name()) != 0){
-            res = false;
-            break;
-        }
-    }
-    return res;
-}
 
+bool View::update_capacity(const std::vector<UpdateUnite> &update_units) { return view_meta_.update_capacity(update_units); }
 bool View::insert_capacity() { return view_meta_.insert_capacity(); }

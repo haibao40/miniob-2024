@@ -48,7 +48,8 @@ public:
   RC open(Db *db, const char *meta_file, const char *base_dir);
 
   //检查该视图能否更新
-  bool update_capacity();
+//   bool update_capacity();
+  bool update_capacity(const std::vector<UpdateUnite> &update_units);
   bool insert_capacity();
 
 public:

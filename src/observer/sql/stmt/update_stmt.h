@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class FilterStmt;
+class View;
 
 /**
  * @brief 更新语句
@@ -37,6 +38,7 @@ public:
 
 public:
   static RC create(Db *db, UpdateSqlNode &update_sql, Stmt *&stmt);
+  static RC create_with_view(Db *db, View* view, UpdateSqlNode &update_sql, Stmt *&stmt);
 
 public:
   Table *table() const { return table_; }
@@ -47,4 +49,8 @@ private:
   Table *table_               = nullptr;
   std::vector<UpdateUnite>    update_unites_;   /// 要更新的字段以及对应的值,对应的值可能是常量表达式，也可能是子查询
   FilterStmt *filter_stmt_    = nullptr;
+
+public:
+  static RC get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions,
+  std::vector<ConditionSqlNode> &true_conditions);
 };
