@@ -132,6 +132,7 @@ RC CreateViewStmt::get_con_infos(Db *db, std::vector<FilterUnit *> &filter_units
       }else{
         return RC::UNIMPLEMENTED;
       }
+      condition.left_value = value;
     }
 
     if(right->type() == ExprType::FIELD){
@@ -150,6 +151,8 @@ RC CreateViewStmt::get_con_infos(Db *db, std::vector<FilterUnit *> &filter_units
       }else{
         return RC::UNIMPLEMENTED;
       }
+      // ValueExpr *value_expr = new ValueExpr(value);
+      condition.right_value = value;
     }
 
     con_infos.push_back(condition);
