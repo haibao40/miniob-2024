@@ -23,17 +23,58 @@ using namespace std;
 using namespace common;
 RC OrderByPhysicalOperator::sorteTuples(){
 
-        auto comparator = [this](const Tuple* a, const Tuple* b) {  
+        // auto comparator = [this](const Tuple* a, const Tuple* b) {  
+        //    int result = 0;
+        //    for (size_t i = 0; i < sorted_columns->size(); ++i) {  
+        //       //李晓鹏 根据 列的信息 获取cell的值
+        //        bool isAscending = (*sorted_is_asc)[i];
+        //        TupleCellSpec* cellSpec = (*sorted_columns)[i]; 
+        //        Value aValue ;
+        //        Value bValue ;
+        //        a->find_cell(*cellSpec, aValue);
+        //        b->find_cell(*cellSpec, bValue);
+        //        if(aValue.attr_type() == AttrType::NULLS || aValue.attr_type() == AttrType::NULLS ){
+        //           if(aValue.attr_type() == AttrType::NULLS && bValue.attr_type() == AttrType::NULLS){
+        //             result = 0;
+        //           }else{
+        //             if(aValue.attr_type() == AttrType::NULLS){ 
+        //                 result = -1;
+        //             }else{
+        //                result = 1 ;
+        //             }
+        //           }
+        //        }else{
+        //           result = aValue.compare(bValue);             
+        //        }
+        //        if(isAscending == false){
+        //         result = -result;
+        //        }
+        //        if(result != 0){break;}
+        //    }
+        //    if(result<0){
+        //     return true ;
+        //    }else{return false;}
+           
+        // };  
+
+           auto comparator = [this](const Tuple* a, const Tuple* b) {  
            int result = 0;
-           for (size_t i = 0; i < sorted_columns->size(); ++i) {  
-              //李晓鹏 根据 列的信息 获取cell的值
-               bool isAscending = (*sorted_is_asc)[i];
-               TupleCellSpec* cellSpec = (*sorted_columns)[i]; 
-               Value aValue ;
-               Value bValue ;
-               a->find_cell(*cellSpec, aValue);
-               b->find_cell(*cellSpec, bValue);
-               if(aValue.attr_type() == AttrType::NULLS || aValue.attr_type() == AttrType::NULLS ){
+           for (auto it = order_expressions_.rbegin(); it != order_expressions_.rend(); ++it) {
+             ORderedFieldExpr* orderedFieldExpr = dynamic_cast<ORderedFieldExpr*>(it->get());
+             Value aValue ;
+             Value bValue ;
+             bool isAscending;
+            if (orderedFieldExpr) { 
+               TupleCellSpec * spec = new TupleCellSpec(orderedFieldExpr->table_name(), orderedFieldExpr->field_name());
+              isAscending = orderedFieldExpr->get_asc();
+               a->find_cell(*spec, aValue);
+               b->find_cell(*spec, bValue);
+            }else{
+              isAscending = true;
+              it->get()->get_value(*a,aValue);
+              it->get()->get_value(*b,bValue);
+            }
+            if(aValue.attr_type() == AttrType::NULLS || aValue.attr_type() == AttrType::NULLS ){
                   if(aValue.attr_type() == AttrType::NULLS && bValue.attr_type() == AttrType::NULLS){
                     result = 0;
                   }else{
@@ -53,9 +94,8 @@ RC OrderByPhysicalOperator::sorteTuples(){
            }
            if(result<0){
             return true ;
-           }else{return false;}
-           
-        };  
+           }else{return false;}   
+        };
   
         std::sort(tuple_sorted->begin(), tuple_sorted->end(), comparator);  
         return RC::SUCCESS;
@@ -132,6 +172,8 @@ RC OrderByPhysicalOperator::set_sorted_columns(){
         TupleCellSpec * spec = new TupleCellSpec(orderedFieldExpr->table_name(), orderedFieldExpr->field_name());
         sorted_is_asc->push_back(orderedFieldExpr->get_asc());
         sorted_columns->push_back(spec);
+      }else{
+        sorted_is_asc->push_back(true);
       }
     }
   return RC::SUCCESS;

@@ -30,7 +30,9 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
 #include "sql/operator/order_by_logical_operator.h"
+#include "sql/operator/limit_logical_operator.h"
 #include "sql/operator/insert_with_tuples_logical_operator.h"
+#include "sql/operator/vector_index_logical_operator.h"
 
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
@@ -113,6 +115,149 @@ RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<Logica
 }
 
 RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+   unique_ptr<VectorIndexLogicalOperator> index_scan(
+    new VectorIndexLogicalOperator((select_stmt->tables())[0], ReadWriteMode::READ_ONLY,select_stmt->limit_count(),
+                                    select_stmt->order_by()));
+    if(index_scan->index() != nullptr){
+      auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+      unique_ptr<LogicalOperator> log_scan = std::move(index_scan);
+      project_oper->add_child(std::move(log_scan));
+      logical_operator = std::move(project_oper);
+      return RC::SUCCESS;
+    }
+   
+
+
+
+  unique_ptr<LogicalOperator> *last_oper = nullptr;
+
+  unique_ptr<LogicalOperator> table_oper(nullptr);
+  last_oper = &table_oper;
+
+  const std::vector<Table *> &tables = select_stmt->tables();
+  if(select_stmt->join_filter().size() == 0){ //这是原来的多表查询逻辑,没有使用join 这里有更好的方案
+    for (Table *table : tables) {
+    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+    if (table_oper == nullptr) {
+      table_oper = std::move(table_get_oper);
+    } else {
+      JoinLogicalOperator *join_oper = new JoinLogicalOperator;
+      join_oper->add_child(std::move(table_oper));
+      join_oper->add_child(std::move(table_get_oper));
+      table_oper = unique_ptr<LogicalOperator>(join_oper);
+    }
+  }
+  }else{
+    int on_predicate_oper_current = 0;
+    std::vector<FilterStmt*> join_filters = select_stmt->join_filter();
+    for (Table *table : tables) {
+    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+    if (table_oper == nullptr) {
+      table_oper = std::move(table_get_oper);
+    }else{
+      unique_ptr<LogicalOperator> on_predicate_oper;
+      //创建过滤算子，放在当前join算子的上面
+      RC RC_JOIN_ON_RC = create_plan(join_filters[join_filters.size() - on_predicate_oper_current -1], on_predicate_oper);
+      if (OB_FAIL(RC_JOIN_ON_RC)) {
+          LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(RC_JOIN_ON_RC));
+          return RC_JOIN_ON_RC;
+      }
+      on_predicate_oper_current++;
+      LogicalOperator* join_oper = new JoinLogicalOperator;
+      join_oper->add_child(std::move(table_oper));
+      join_oper->add_child(std::move(table_get_oper));
+      if(on_predicate_oper){
+         on_predicate_oper->add_child(std::move(unique_ptr<LogicalOperator>(join_oper)));
+         table_oper =std::move(on_predicate_oper);
+      
+      }else{
+        table_oper = std::move(std::move(unique_ptr<LogicalOperator>(join_oper)));
+      }
+    }
+    }
+
+
+  }
+  unique_ptr<LogicalOperator> predicate_oper;
+
+  RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (predicate_oper) {
+    if (*last_oper) {
+      predicate_oper->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &predicate_oper;
+  }
+
+  unique_ptr<LogicalOperator> group_by_oper;
+  rc = create_group_by_plan(select_stmt, group_by_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (group_by_oper) {
+    if (*last_oper) {
+      group_by_oper->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &group_by_oper;
+  }
+
+  /*     这一段都是新加的having过滤算子    */
+  unique_ptr<LogicalOperator> having_predicate_oper;
+
+  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create having_predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (having_predicate_oper) {
+    if (*last_oper) {
+      having_predicate_oper->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &having_predicate_oper;
+  }
+  /*     这一段都是新加的having过滤算子    */
+
+  unique_ptr<LogicalOperator> order_by_oper; //李晓鹏笔记 将逻辑计划加入到逻辑计划树形结构里面 在视图下面 在group by 上面
+  rc = create_order_by_plan(select_stmt, order_by_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+  if(order_by_oper){
+      if (*last_oper) {
+      order_by_oper->add_child(std::move(*last_oper));
+    }
+    last_oper = &order_by_oper;
+  }
+  unique_ptr<LogicalOperator> limit_oper; 
+  rc = create_limit_plan(select_stmt, limit_oper);
+  if(limit_oper){
+    if (*last_oper) {
+       limit_oper->add_child(std::move(*last_oper));
+    }
+    last_oper = &limit_oper;
+  }
+  auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+  if (*last_oper) {
+    project_oper->add_child(std::move(*last_oper));
+  }
+
+  logical_operator = std::move(project_oper);
+  return RC::SUCCESS;
+}
+
+RC LogicalPlanGenerator::create_without_limit_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   unique_ptr<LogicalOperator> *last_oper = nullptr;
 
@@ -224,7 +369,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
     last_oper = &order_by_oper;
   }
-
+  
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
   if (*last_oper) {
     project_oper->add_child(std::move(*last_oper));
@@ -444,7 +589,16 @@ RC LogicalPlanGenerator::create_plan(ExplainStmt *explain_stmt, unique_ptr<Logic
   logical_operator->add_child(std::move(child_oper));
   return rc;
 }
-
+RC LogicalPlanGenerator::create_limit_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator){
+  int limit_count = select_stmt->limit_count();
+  if(limit_count < 0){
+    logical_operator = NULL;
+    return RC::SUCCESS;
+  }else{
+      logical_operator = make_unique<LimitLogicalOperator>(limit_count);
+      return RC::SUCCESS;
+  }
+}
 // 李晓鹏笔记 搞一个 order_by的逻辑计划 几乎照抄 group_by_plan
 RC LogicalPlanGenerator::create_order_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator){
   vector<unique_ptr<Expression>> &order_by_expressions = select_stmt->order_by();
@@ -561,7 +715,8 @@ RC LogicalPlanGenerator::create_plan(CreateTableSelectStmt *create_table_select_
 
   unique_ptr<LogicalOperator> project_oper;
 
-  RC rc = create_plan(select_stmt, project_oper);
+  // RC rc = create_plan(select_stmt, project_oper);
+  RC rc = create_without_limit_plan(select_stmt, project_oper);
   if (rc != RC::SUCCESS) {
     return rc;
   }

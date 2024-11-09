@@ -58,6 +58,8 @@ enum class PhysicalOperatorType
   EXPR_VEC,
   ORDER_BY,
   INSERT_TUPLES,
+  LIMIT,
+  VECTOR_INDEX_SCAN,
 };
 
 /**

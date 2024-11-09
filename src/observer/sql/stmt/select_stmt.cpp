@@ -249,6 +249,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->order_by_.swap(order_by_expressions);
   select_stmt->join_filter_.swap(join_filter);
+  select_stmt->limit_count_ = select_sql.limit_count;
   stmt                      = select_stmt;
   GlobalVariable::curren_resolve_select_stmt = select_stmt->parent_;   //回溯,因为可能存在一个外层查询有多个子查询的情况
   return RC::SUCCESS;

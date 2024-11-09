@@ -11,10 +11,8 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
-
 #include <limits.h>
 #include <string.h>
-
 #include "common/defs.h"
 #include "common/lang/string.h"
 #include "common/lang/span.h"
@@ -209,12 +207,11 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
        field_metas_point->push_back(&((*field_metas)[i]));
     }
 
-    BplusTreeIndex *index      = new BplusTreeIndex();
-    string          index_file = table_index_file(base_dir, name(), index_meta->name());
-    //Table *table, const char *file_name, const IndexMeta &index_meta,
-    //const vector<const FieldMeta*>* &field_metas
-    rc = index->open(this, index_file.c_str(), *index_meta, field_metas_point);
-    if (rc != RC::SUCCESS) {
+    if(index_meta->distance_type()<0){
+       BplusTreeIndex *index      = new BplusTreeIndex();
+       string   index_file = table_index_file(base_dir, name(), index_meta->name());
+       rc = index->open(this, index_file.c_str(), *index_meta, field_metas_point);
+       if (rc != RC::SUCCESS) {
       delete index;
       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
                 name(), index_meta->name(), index_file.c_str(), strrc(rc));
@@ -223,8 +220,20 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
       return rc;
     }
     indexes_.push_back(index);
+    }else{
+       IvfflatIndex *index      = new IvfflatIndex();
+       string   index_file = table_index_file(base_dir, name(), index_meta->name());
+       rc = index->open(this, index_file.c_str(), *index_meta, field_metas_point);
+       if (rc != RC::SUCCESS) {
+       delete index;
+       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
+                name(), index_meta->name(), index_file.c_str(), strrc(rc));
+      indexes_.push_back(index);
+       return rc;
+      }
+       indexes_.push_back(index);
   }
-
+  }
   return rc;
 }
 
@@ -538,7 +547,125 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   }
   return rc;
 }
+RC Table::create_vector_index(Trx *trx, const vector<const FieldMeta*> *field_metas, const char *index_name,
+                        int lists,int distance_type,int probes){
+                           vector<const FieldMeta*> *field_meta_not_const = new vector<const FieldMeta*> ();
+  for(auto field : *field_metas){
+    field_meta_not_const->push_back(field);
+  }
+  if(common::is_blank(index_name)){
+    LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
+    return RC::INVALID_ARGUMENT;
+  }
+  for(auto field_meta:*field_metas){
+    if(nullptr == field_meta){
+    LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
+    return RC::INVALID_ARGUMENT;
+    }
+  }
+  IndexMeta new_index_meta;
+  RC rc = new_index_meta.init(index_name, *field_metas,distance_type);
+  if(rc != RC::SUCCESS) {
+    LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s",
+             name(), index_name);
+    return rc;
+  }
+  // 创建索引相关数据
+  IvfflatIndex *index      = new IvfflatIndex();
+  string          index_file = table_index_file(base_dir_.c_str(), name(), index_name);
+  index->init(lists,distance_type,probes);
+  rc = index->create(this, index_file.c_str(), new_index_meta, field_meta_not_const);
+  if (rc != RC::SUCCESS) {
+    delete index;
+    LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
+    return rc;
+  }
 
+  // 遍历当前的所有数据，插入这个索引
+  RecordFileScanner scanner;
+  rc = get_record_scanner(scanner, trx, ReadWriteMode::READ_ONLY);
+
+  std::vector<Record *>* records_ = new std::vector<Record *>();
+  while (true) {
+    Record* record = new Record();
+    if(OB_SUCC(rc = scanner.next(*record)) == false){
+      break;
+    }
+    records_->push_back(record);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+               name(), index_name, strrc(rc));
+      return rc;
+    }
+  }
+  if (RC::RECORD_EOF == rc) {
+    rc = RC::SUCCESS;
+  } else {
+    LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+             name(), index_name, strrc(rc));
+    return rc;
+  }
+  scanner.close_scan();
+  index->set_data(records_);
+  index->Cluster();
+  // Record record;
+  // while (OB_SUCC(rc = scanner.next(record))) {
+  //   rc = index->insert_entry(record.data(), &record.rid());
+  //   if (rc != RC::SUCCESS) {
+  //     LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+  //              name(), index_name, strrc(rc));
+  //     return rc;
+  //   }
+  // }
+  // if (RC::RECORD_EOF == rc) {
+  //   rc = RC::SUCCESS;
+  // } else {
+  //   LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+  //            name(), index_name, strrc(rc));
+  //   return rc;
+  // }
+  // scanner.close_scan();
+  // LOG_INFO("inserted all records into new index. table=%s, index=%s", name(), index_name);
+  (*vector_index_)[index_name] = index;
+   indexes_.push_back(index);
+
+  /// 接下来将这个索引放到表的元数据中
+  TableMeta new_table_meta(table_meta_);
+  rc = new_table_meta.add_index(new_index_meta);
+  if (rc != RC::SUCCESS) {
+    //LOG_ERROR("Failed to add index (%s) on table (%s). error=%d:%s", index_name, name(), rc, strrc(rc));
+    return rc;
+  }
+  string  tmp_file = table_meta_file(base_dir_.c_str(), name()) + ".tmp";
+  fstream fs;
+  fs.open(tmp_file, ios_base::out | ios_base::binary | ios_base::trunc);
+  if (!fs.is_open()) {
+    LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", tmp_file.c_str(), strerror(errno));
+    return RC::IOERR_OPEN;  // 创建索引中途出错，要做还原操作
+  }
+  if (new_table_meta.serialize(fs) < 0) {
+    LOG_ERROR("Failed to dump new table meta to file: %s. sys err=%d:%s", tmp_file.c_str(), errno, strerror(errno));
+    return RC::IOERR_WRITE;
+  }
+  fs.close();
+
+  // 覆盖原始元数据文件
+  string meta_file = table_meta_file(base_dir_.c_str(), name());
+
+  int ret = rename(tmp_file.c_str(), meta_file.c_str());
+  if (ret != 0) {
+    LOG_ERROR("Failed to rename tmp meta file (%s) to normal meta file (%s) while creating index (%s) on table (%s). "
+              "system error=%d:%s",
+              tmp_file.c_str(), meta_file.c_str(), index_name, name(), errno, strerror(errno));
+    return RC::IOERR_WRITE;
+  }
+
+  table_meta_.swap(new_table_meta);
+
+  LOG_INFO("Successfully added a new index (%s) on the table (%s)", index_name, name());
+  return rc;
+  return rc;
+  }
 
 RC Table::create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, const char *index_name,bool is_unique){
   vector<const FieldMeta*> *field_meta_not_const = new vector<const FieldMeta*> ();
@@ -758,10 +885,10 @@ RC Table::delete_record(const Record &record)
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    rc = index->delete_entry(record.data(), &record.rid());
-    ASSERT(RC::SUCCESS == rc, 
-           "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
-           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+       rc = index->delete_entry(record.data(), &record.rid());
+       ASSERT(RC::SUCCESS == rc,
+            "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
+            name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
   }
   rc = record_handler_->delete_record(&record.rid());
   return rc;
@@ -774,19 +901,34 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       break;
-    }
+  }
   }
   return rc;
+}
+
+
+vector<Record*>* Table::ann_search(vector<float> base_vector, int limit,IvfflatIndex* index){
+  vector<Record*>* result = new vector<Record*>();
+  vector<RID>* ids = index->ann_search(base_vector,limit);
+  for(int i=0;i<ids->size();i++){
+      Record* record = new Record();
+      this->get_record(((*ids)[i]),*record);
+      result->push_back(record);
+  }
+  return result;
+
 }
 
 RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists)
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    rc = index->delete_entry(record, &rid);
-    if (rc != RC::SUCCESS) {
-      if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
-        break;
+    if(index->is_vector_index() == false){
+      rc = index->delete_entry(record, &rid);
+      if (rc != RC::SUCCESS) {
+        if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
+          break;
+        }
       }
     }
   }

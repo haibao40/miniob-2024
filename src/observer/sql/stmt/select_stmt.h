@@ -71,6 +71,7 @@ public:
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
   std::vector<std::unique_ptr<Expression>> &order_by() { return order_by_; }
   std::vector<FilterStmt*>   &join_filter(){return join_filter_; }
+  int &limit_count(){return limit_count_;}
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<Table *>                     tables_;
@@ -80,6 +81,7 @@ private:
   FilterStmt                              *having_filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> order_by_;
   std::vector<FilterStmt*> join_filter_;
+  int limit_count_ ;
 public:
   HierarchicalScope* scope_ = nullptr;   //当前子查询对应的作用域
   SelectStmt*  parent_ = nullptr; //当前子查询对应的上层查询的select_stmt

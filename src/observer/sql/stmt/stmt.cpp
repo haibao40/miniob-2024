@@ -127,6 +127,9 @@ RC Stmt::create_stmt(Db *db, ParsedSqlNode &sql_node, Stmt *&stmt)
     case SCF_CREATE_TABLE_SELECT: {
       return CreateTableSelectStmt::create(db, sql_node.create_table_select, stmt);
     }
+    case SCF_CREATE_VECTOR_INDEX: {
+      return CreateVectorIndexStmt::create(db, sql_node.create_vector_index, stmt);
+    }
 
     default: {
       LOG_INFO("Command::type %d doesn't need to create statement.", sql_node.flag);
