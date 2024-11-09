@@ -192,3 +192,4 @@ RC View::sync()
 
 bool View::update_capacity(const std::vector<UpdateUnite> &update_units) { return view_meta_.update_capacity(update_units); }
 bool View::insert_capacity() { return view_meta_.insert_capacity(); }
+bool View::delete_capacity() { return view_meta_.delete_capacity(); }

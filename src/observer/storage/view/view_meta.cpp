@@ -356,6 +356,24 @@ bool ViewMeta::insert_capacity(){
     return res;
 }
 
+bool ViewMeta::delete_capacity(){
+    bool res = true;
+    if(view_fields_.size() <= 1){
+        return true;
+    }
+    const char* table_name = view_fields_[0].table_name();
+    if(view_fields_[0].type() != ExprType::FIELD){
+        return false;
+    }
+    for(size_t i = 1; i < view_fields_.size(); i++){
+        if(strcasecmp(table_name, view_fields_[i].table_name()) != 0 || view_fields_[i].type() != ExprType::FIELD){
+            res = false;
+            break;
+        }
+    }
+    return res;
+}
+
 bool ViewMeta::update_capacity(const std::vector<UpdateUnite>& update_units){
     bool res = true;
     for(auto update_unit:update_units){

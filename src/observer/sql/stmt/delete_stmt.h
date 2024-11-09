@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 
 class Table;
+class View;
 class FilterStmt;
 
 /**
@@ -37,8 +38,13 @@ public:
 
 public:
   static RC create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt);
+  static RC create_with_view(Db *db, View* view, const DeleteSqlNode &delete_sql, Stmt *&stmt);
 
 private:
   Table      *table_       = nullptr;
   FilterStmt *filter_stmt_ = nullptr;
+
+public:
+  static RC get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions,
+  std::vector<ConditionSqlNode> &true_conditions);
 };

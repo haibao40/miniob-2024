@@ -54,6 +54,7 @@ public:
 //   bool update_capacity();
   bool update_capacity(const std::vector<UpdateUnite> &update_units);
   bool insert_capacity();
+  bool delete_capacity();
 
 public:
   int32_t     view_id() const { return view_meta_.view_id(); }
