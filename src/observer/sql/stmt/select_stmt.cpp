@@ -513,6 +513,7 @@ RC SelectStmt::replace_alias_to_real_name(Db *db, SelectSqlNode &select_sql, Sel
 }
 
 RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
+  RC rc = RC::SUCCESS;
   //手搓一个selectsqlnode出来
   SelectSqlNode new_select_sql;
   //get View and ViewMeta
@@ -533,7 +534,10 @@ RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
 
   /* handle query_expressions */
   std::vector<unique_ptr<Expression>> query_expressions;
-  get_query_expressions(view, query_expressions, select_sql.expressions);
+  rc = get_query_expressions(view, query_expressions, select_sql.expressions);
+  if(rc != RC::SUCCESS){
+    return rc;
+  }
   new_select_sql.expressions.swap(query_expressions);
   /* handle query_expressions */
   
@@ -648,6 +652,9 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
           auto child_expr = static_cast<UnboundFieldExpr* >(unbound_agg_expr->child().get());
           const char* query_field_name = child_expr->field_name(); //拿个名字
           const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+          if(view_field_meta == nullptr){
+            return RC::UNSUPPORTED;
+          }
 
           child = new UnboundFieldExpr(view_field_meta->table_name(), query_field_name, query_field_name);
           child->set_name(query_field_name);
