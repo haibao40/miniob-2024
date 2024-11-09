@@ -112,6 +112,7 @@ struct SelectSqlNode
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
   std::vector<ConditionSqlNode>            having;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>>  order_by;    /// order by 需要的东西
+  int limit_count ;
   // std::map<std::string,std::string>  alias_name; //别名到真实名字对应的map
   // std::map<std::string,std::string>  name_alias ;//真实名字到别名对应的map
   std::vector<std::vector<ConditionSqlNode>*>  join_conditions; //join的条件 join后面都跟着很多条件
@@ -241,6 +242,17 @@ struct CreateIndexSqlNode
   bool unique; //这里应该有一个索引类型,支持唯一
 };
 
+struct CreateVectorIndexSqlNode
+{
+  std::string index_name;      ///< Index name
+  std::string relation_name;   ///< Relation name
+  std::string attribute_name;  ///< Attribute name
+  std::vector<std::string> attribute_names; 
+  int lists;
+  int probes;
+  int distance_type ;
+};
+
 /**
  * @brief 描述一个drop index语句
  * @ingroup SQLParser
@@ -337,6 +349,7 @@ enum SqlCommandFlag
   SCF_CREATE_TABLE,
   SCF_DROP_TABLE,
   SCF_CREATE_INDEX,
+  SCF_CREATE_VECTOR_INDEX,
   SCF_DROP_INDEX,
   SCF_SYNC,
   SCF_SHOW_TABLES,
@@ -370,6 +383,7 @@ public:
   DropTableSqlNode         drop_table;
   CreateIndexSqlNode       create_index;
   DropIndexSqlNode         drop_index;
+  CreateVectorIndexSqlNode create_vector_index;
   DescTableSqlNode         desc_table;
   LoadDataSqlNode          load_data;
   ExplainSqlNode           explain;

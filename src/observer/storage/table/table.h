@@ -13,7 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #pragma once
-
+#include "storage/index/ivfflat_index.h"
 #include "storage/table/table_meta.h"
 #include "common/types.h"
 #include "common/lang/span.h"
@@ -42,7 +42,7 @@ class Table
 public:
   Table() = default;
   ~Table();
-
+  vector<Record*>* ann_search(vector<float> base_vector, int limit,IvfflatIndex* index);
   /**
    * 创建一个表
    * @param path 元数据保存的文件(完整路径)
@@ -98,7 +98,8 @@ public:
   // TODO refactor
   RC create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name);
   RC create_index(Trx *trx, const vector<const FieldMeta*> *field_metas, const char *index_name,bool is_unique);
-  
+  RC create_vector_index(Trx *trx, const vector<const FieldMeta*> *field_metas, const char *index_name,
+                        int lists,int distance_type,int probes);
   RC unique_index_contor(const char* record);
   RC get_record_scanner(RecordFileScanner &scanner, Trx *trx, ReadWriteMode mode);
 
@@ -156,4 +157,5 @@ private:
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
+  map<string,IvfflatIndex*>* vector_index_ = new map<string,IvfflatIndex*>();
 };

@@ -30,7 +30,9 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
 #include "sql/operator/order_by_logical_operator.h"
+#include "sql/operator/limit_logical_operator.h"
 #include "sql/operator/insert_with_tuples_logical_operator.h"
+#include "sql/operator/vector_index_logical_operator.h"
 
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
@@ -114,6 +116,20 @@ RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<Logica
 
 RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
+   unique_ptr<VectorIndexLogicalOperator> index_scan(
+    new VectorIndexLogicalOperator((select_stmt->tables())[0], ReadWriteMode::READ_ONLY,select_stmt->limit_count(),
+                                    select_stmt->order_by()));
+    if(index_scan->index() != nullptr){
+      auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+      unique_ptr<LogicalOperator> log_scan = std::move(index_scan);
+      project_oper->add_child(std::move(log_scan));
+      logical_operator = std::move(project_oper);
+      return RC::SUCCESS;
+    }
+   
+
+
+
   unique_ptr<LogicalOperator> *last_oper = nullptr;
 
   unique_ptr<LogicalOperator> table_oper(nullptr);
@@ -224,7 +240,14 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
     last_oper = &order_by_oper;
   }
-
+  unique_ptr<LogicalOperator> limit_oper; 
+  rc = create_limit_plan(select_stmt, limit_oper);
+  if(limit_oper){
+    if (*last_oper) {
+       limit_oper->add_child(std::move(*last_oper));
+    }
+    last_oper = &limit_oper;
+  }
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
   if (*last_oper) {
     project_oper->add_child(std::move(*last_oper));
@@ -444,7 +467,16 @@ RC LogicalPlanGenerator::create_plan(ExplainStmt *explain_stmt, unique_ptr<Logic
   logical_operator->add_child(std::move(child_oper));
   return rc;
 }
-
+RC LogicalPlanGenerator::create_limit_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator){
+  int limit_count = select_stmt->limit_count();
+  if(limit_count < 0){
+    logical_operator = NULL;
+    return RC::SUCCESS;
+  }else{
+      logical_operator = make_unique<LimitLogicalOperator>(limit_count);
+      return RC::SUCCESS;
+  }
+}
 // 李晓鹏笔记 搞一个 order_by的逻辑计划 几乎照抄 group_by_plan
 RC LogicalPlanGenerator::create_order_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator){
   vector<unique_ptr<Expression>> &order_by_expressions = select_stmt->order_by();

@@ -171,6 +171,12 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
         JOIN
         AS
         UNIQUE // 唯一索引
+        WITH
+        DISTANCE
+        TYPE
+        LISTS
+        PROBES
+        LIMIT
         LEFT_BRACKET     //左方括号[,用于支持使用列表表示向量
         RIGHT_BRACKET    //右方括号],用于支持使用列表表示向量
         L2_DISTANCE      //向量函数L2_DISTANCE
@@ -215,10 +221,12 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
 %type <number>              type
 %type <number>              not_null
+%type <number>              limit_
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
 %type <string>              relation
+%type <number>              distance_type
 %type <join_list>           join_in
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
@@ -251,6 +259,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
 %type <sql_node>            create_index_stmt
+%type <sql_node>            create_index_vector_stmt
 %type <sql_node>            drop_index_stmt
 %type <sql_node>            sync_stmt
 %type <sql_node>            begin_stmt
@@ -288,6 +297,7 @@ command_wrapper:
   | show_tables_stmt
   | desc_table_stmt
   | create_index_stmt
+  | create_index_vector_stmt
   | drop_index_stmt
   | sync_stmt
   | begin_stmt
@@ -381,6 +391,35 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       delete($8);
     }
     ;
+distance_type:
+   L2_DISTANCE {
+       $$  = 1;
+   }|
+   COSINE_DISTANCE{
+      $$  =  2;
+   }
+   |INNER_PRODUCT{
+      $$  =  3;
+   }
+   ;
+create_index_vector_stmt:
+  CREATE VECTOR_T INDEX ID ON ID LBRACE rel_list RBRACE  WITH LBRACE TYPE EQ ID COMMA DISTANCE EQ distance_type COMMA LISTS EQ NUMBER COMMA PROBES EQ NUMBER RBRACE
+  {
+     $$ = new ParsedSqlNode(SCF_CREATE_VECTOR_INDEX);
+     CreateVectorIndexSqlNode &create_index = $$->create_vector_index;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      for (const auto& pair : *$8) {
+         create_index.attribute_names.push_back(pair.first);
+      }
+      create_index.lists = $22;
+      create_index.probes = $26;
+      create_index.distance_type = $18;
+  }
+  ;
+
+
+
 
 drop_index_stmt:      /*drop index 语句的语法解析树*/
     DROP INDEX ID ON ID
@@ -656,7 +695,7 @@ create_table_select_stmt:      /*  create_table_select 语句的语法解析树*
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by having order_by
+    SELECT expression_list FROM rel_list where group_by having order_by limit_
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -689,6 +728,7 @@ select_stmt:        /*  select 语句的语法解析树*/
         delete $8;
       }
       $$->selection.join_conditions.swap(join_conditions);
+      $$->selection.limit_count = $9;
     }
     ;
 calc_stmt:
@@ -1114,7 +1154,13 @@ join_in:
   }
   ;
 
-
+limit_:
+    {
+      $$ = -1;
+    }
+    | LIMIT number{
+        $$ = $2;
+    }
 
 order_by_field:
     rel_attr DESC {
@@ -1133,11 +1179,12 @@ order_by_field:
       $$ = new UnboundORderedFieldExpr(node->relation_name, node->attribute_name,true);
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
-    } ;
+      }
+    | expression {
+      $$ = $1;
+    }
+    ;
 order_by_field_list:
-    {
-      $$ = nullptr;
-    }|
     order_by_field{
       $$ = new std::vector<std::unique_ptr<Expression>> ;
       $$->emplace_back($1);
