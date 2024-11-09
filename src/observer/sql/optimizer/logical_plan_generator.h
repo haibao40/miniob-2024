@@ -52,6 +52,7 @@ private:
   RC create_limit_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_group_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_order_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
+  RC create_without_limit_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator);
 
   /***
   * @brief 这里是直接为子查询生成物理算子,生成的物理算子存放在子查询的物理算子中属性中,也就是说，上层查询在生成逻辑算子的时候，下层子查询就已经生成好物理算子了
