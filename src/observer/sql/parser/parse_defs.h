@@ -334,6 +334,7 @@ struct CreateTableSelectSqlNode
 struct CreateViewSqlNode
 {
   std::string                  view_name;   ///< Relation name
+  std::vector<std::string>    attr_names;
   ParsedSqlNode*               sql_node;
 };
 

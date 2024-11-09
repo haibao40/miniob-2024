@@ -23,6 +23,15 @@ RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&s
     return rc;
   }
 
+  if(create_view.attr_names.size() > 0){
+    // SelectSqlNode* select = &(create_view.sql_node->selection);
+    for(size_t i = 0 ; i < create_view.attr_names.size(); i++){
+      std::string alias = create_view.attr_names[i];
+      select_stmt->query_expressions()[i].get()->set_name(alias);
+      // set_name(alias);
+    }
+  }
+
   std::vector<ViewAttrInfoSqlNode> view_attr_infos;
   vector<unique_ptr<Expression>> &query_expressions = select_stmt->query_expressions();
   //根据绑定好的表达式，来获取建表的字段属性

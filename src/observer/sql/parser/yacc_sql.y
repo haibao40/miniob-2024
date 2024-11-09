@@ -191,6 +191,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
   std::vector<AttrInfoSqlNode> *             attr_infos;
+  std::vector<std::string> *                 attr_names;
   AttrInfoSqlNode *                          attr_info;
   std::vector<ViewAttrInfoSqlNode> *         view_attr_infos;
   ViewAttrInfoSqlNode *                      view_attr_info;
@@ -226,6 +227,7 @@ std::vector<std::vector<ConditionSqlNode>*>  join_conditions;
 %type <join_list>           join_in
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
+%type <attr_names>          attr_name_list
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <update_unite>        update_unite
@@ -640,6 +642,34 @@ create_view_stmt:              /*  create_view 语句的语法解析树*/
       $$->create_view.view_name    = $3;
       $$->create_view.sql_node      = $5; 
       free($3);
+    }
+    | CREATE VIEW ID LBRACE ID attr_name_list RBRACE  AS select_stmt{
+      $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+      $$->create_view.view_name    = $3;
+
+      std::vector<std::string> *p = $6;
+      p->push_back($5);
+
+      $$->create_view.attr_names.swap(*p);
+      std::reverse($$->create_view.attr_names.begin(), $$->create_view.attr_names.end());
+      $$->create_view.sql_node      = $9; 
+      free($3);
+    }
+    ;
+attr_name_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | COMMA ID attr_name_list
+    {
+      if ($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<std::string>;
+      }
+      $$->emplace_back($2);
+      free($2);
     }
     ;
 drop_view_stmt:
