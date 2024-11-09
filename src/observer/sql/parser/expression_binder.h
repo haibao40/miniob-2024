@@ -94,7 +94,7 @@ public:
   //parse会把所有的加减法都解析出来
   Expression* parseExpression(const std::string& expr, size_t& pos, const char *table_name) {
     // Expression *node = nullptr;
-    size_t lpos = pos, rpos;
+    size_t lpos = pos, rpos, start = pos;
     Expression *left = nullptr, *right = nullptr;
     bool has_op = false;
     char op;
@@ -102,8 +102,8 @@ public:
         op = expr[pos++];
         if(op == '+' || op == '-'){
           left = parseExpression(expr.substr(lpos, pos-lpos-1), lpos, table_name);
-          rpos = pos;
-          right = parseExpression(expr.substr(rpos, expr.length()-pos), rpos, table_name);
+          rpos = 0;
+          right = parseExpression(expr.substr(pos, expr.length()-pos), rpos, table_name);
           break;
         }else if(op == '*' || op == '/'){
           has_op = true;
@@ -112,7 +112,7 @@ public:
     }
 
     if(left == nullptr && right == nullptr && !has_op){
-      std::string str = getNextToken(expr, lpos);
+      std::string str = getNextToken(expr, start);
       if(isInteger(str)){
         return new ValueExpr(Value(std::stoi(str)));
       }else{

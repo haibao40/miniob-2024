@@ -656,10 +656,26 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             return RC::UNSUPPORTED;
           }
 
-          child = new UnboundFieldExpr(view_field_meta->table_name(), query_field_name, query_field_name);
-          child->set_name(query_field_name);
-        }else if(unbound_agg_expr->child().get()->type() == ExprType::STAR){
+          if(view_field_meta->type() == ExprType::FIELD){
+            child = new UnboundFieldExpr(view_field_meta->table_name(), query_field_name, query_field_name);
+            child->set_name(query_field_name);
+          }
+          else if(view_field_meta->type() == ExprType::ARITHMETIC){
+            BinderContext binder_context;
+            ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+            size_t pos = 0;
+            //如果表达式有多个表的字段，暂时干不了这活
+            ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+            pos, view_field_meta->table_name()));
+            expr->set_name(query_field_name);
+            child = expr;
+          }
+        }
+        else if(unbound_agg_expr->child().get()->type() == ExprType::STAR){
           child = new StarExpr();
+        }
+        else if(unbound_agg_expr->child().get()->type() == ExprType::ARITHMETIC){
         }
         UnboundAggregateExpr* expr = new UnboundAggregateExpr(unbound_agg_expr->aggregate_name(), child);
         expr->set_name(unbound_agg_expr->name());
