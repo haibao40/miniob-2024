@@ -893,6 +893,17 @@ expression:
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
     }
+    | LBRACE value RBRACE{
+      $$ = new ValueExpr(*$2);
+      $$->set_name(token_name(sql_string, &@$));
+      delete $2;
+    }
+    | LBRACE '-' value RBRACE{
+      ValueExpr* expr = new ValueExpr(*$3);
+      expr->set_name(token_name(sql_string, &@$));
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, expr, nullptr, sql_string, &@$);
+      delete $3;
+    }
     | rel_attr {
       RelAttrSqlNode *node = $1;
       $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name, node->alias);
