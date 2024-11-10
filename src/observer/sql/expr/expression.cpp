@@ -998,6 +998,33 @@ RC AggregateExpr::type_from_string(const char *type_str, AggregateExpr::Type &ty
   return rc;
 }
 
+RC AggregateExpr::string_from_type(std::string &str, const AggregateExpr::Type type)
+{
+  RC rc = RC::SUCCESS;
+  switch (type)
+  {
+  case Type::AVG:
+    str = "avg";
+    break;
+  case Type::SUM:
+    str = "sum";
+    break;
+  case Type::MIN:
+    str = "min";
+    break;
+  case Type::MAX:
+    str = "max";
+    break;
+  case Type::COUNT:
+    str = "count";
+    break;
+  default:
+    rc = RC::INVALID_ARGUMENT;
+    break;
+  }
+  return rc;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 VectorFunctionExpr::VectorFunctionExpr(VECTOR_FUNCTION type, Expression *left, Expression *right)
     : vector_function_type_(type), left_(left), right_(right)

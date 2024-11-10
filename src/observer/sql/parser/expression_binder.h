@@ -116,13 +116,63 @@ public:
       if(isInteger(str)){
         return new ValueExpr(Value(std::stoi(str)));
       }else{
-        UnboundFieldExpr* unbound_fieldexpr = new UnboundFieldExpr(table_name, expr);
-        return unbound_fieldexpr;
+        if(IsAgg(expr)){
+          UnboundAggregateExpr* unbound_aggexpr = getAggExprByString(expr, table_name);
+          return unbound_aggexpr;
+        }else{
+          UnboundFieldExpr* unbound_fieldexpr = new UnboundFieldExpr(table_name, expr);
+          return unbound_fieldexpr;
+        }
       }
     }else if(left == nullptr && right == nullptr && has_op){
       return nullptr;
     }
     return new ArithmeticExpr(char2type[op], left, right);
+  }
+
+  UnboundAggregateExpr* getAggExprByString(const std::string& expr_str, const char* default_table_name){
+    std::string sql_text = expr_str;
+
+    int lpos = sql_text.find("("), rpos = sql_text.find(")");
+    char* p = (char *)malloc((rpos - lpos)*sizeof(char));
+    const char* field_name = expr_str.c_str();
+    memcpy(p, field_name + lpos + 1, rpos - lpos - 1);
+    p[rpos - lpos - 1] = '\0';
+    char* table_name = (char *)malloc(100 * sizeof(char));
+    memcpy(table_name, field_name, strlen(field_name));
+    table_name[strlen(field_name)] = '\0';
+    // view_field_meta->table_name();
+
+    if(sql_text.find(".") != std::string::npos){
+      int ppos = sql_text.find(".");
+              
+      p = (char *)malloc((rpos - ppos)*sizeof(char));
+      memcpy(p, field_name + ppos + 1, rpos - ppos - 1);
+      p[rpos - ppos - 1] = '\0';
+
+      table_name = (char *)malloc(100 * sizeof(char));
+      memcpy(table_name, sql_text.substr(lpos+1, ppos-lpos-1).c_str(),
+                                             ppos-lpos-1);
+      table_name[ppos-lpos-1] = '\0';
+    }
+
+    UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p);
+    UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+            sql_text.substr(0, sql_text.find("(")).c_str(), child
+    );
+    expr->set_name(field_name);
+    return expr;
+  }
+
+  bool IsAgg(const std::string& expr){
+    if(expr.find("sum") != std::string::npos || 
+       expr.find("max") != std::string::npos || 
+       expr.find("min") != std::string::npos || 
+       expr.find("count") != std::string::npos || 
+       expr.find("avg") != std::string::npos){
+        return true;
+    }
+    return false;
   }
 
   bool isInteger(const std::string& str);

@@ -8,13 +8,17 @@
 
 #include "storage/db/db.h"
 
+#include <unordered_map>
+
 Table * default_table = nullptr;
+std::unordered_map<std::string, std::string> table_names2table_alias;
 
 RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt)
 {
   CreateViewStmt *create_view_stmt = new CreateViewStmt(create_view.view_name);
   const char* table_name = create_view.sql_node->selection.relations.begin()->first.c_str();
   default_table = db->find_table(table_name);
+  table_names2table_alias = create_view.sql_node->selection.relations;
 
   SelectStmt *select_stmt = nullptr;
   RC rc = SelectStmt::create(db, create_view.sql_node->selection, select_stmt);
@@ -104,7 +108,17 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
       attr_info.field_name = child_expr->field_name();
       if(strcasecmp("", expr->expr()) != 0){
         size_t pos = std::string(expr->expr()).find("as");
-        attr_info.field_name = std::string(expr->expr()).substr(0, pos-1);
+        std::string str = std::string(expr->expr()).substr(0, pos-1);
+        for(auto name2alias:table_names2table_alias){
+          if(name2alias.first != name2alias.second){
+            if (str.find(name2alias.second) != std::string::npos)
+            {
+              str = str.replace(str.find(name2alias.second), name2alias.second.length(), name2alias.first);
+            }
+          }
+        }
+
+        attr_info.field_name = str;
       }
       attr_infos.push_back(attr_info);
     }else if(expression.get()->type() == ExprType::ARITHMETIC){
@@ -120,7 +134,22 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
         attr_info.name = expr->name();
         attr_info.field_name = expr->name();
       }
-      attr_info.table_name = default_table->name(); //仅考虑了一个表内字段运算的情况
+
+      std::string str = attr_info.field_name;
+      std::string table_names = "";
+      for(auto name2alias:table_names2table_alias){
+        table_names += name2alias.first + ",";
+        if(name2alias.first != name2alias.second){
+          if (str.find(name2alias.second) != std::string::npos)
+          {
+            str = str.replace(str.find(name2alias.second), name2alias.second.length(), name2alias.first);
+          }
+        }
+      }
+
+      table_names.erase(table_names.length()-1, 1);
+      attr_info.table_name = table_names; //仅考虑了一个表内字段运算的情况
+      attr_info.field_name = str;
       attr_infos.push_back(attr_info);
     }
   }

@@ -113,7 +113,7 @@ std::vector<float> IvfflatIndex::mean_of_vectors(const std::vector<std::vector<f
         if(data.size() == 0){
             return new std::map<std::vector<float>, std::vector<RID>>();
         } 
-        if(k > data.size()){
+        if((size_t)k > data.size()){
             k = data.size();
         }
 

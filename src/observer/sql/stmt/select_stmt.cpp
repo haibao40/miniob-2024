@@ -24,6 +24,11 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/global_variable.h"
 
+#include <iostream>
+#include <sstream>
+#include <vector>
+#include <string>
+
 using namespace std;
 using namespace common;
 
@@ -542,11 +547,27 @@ RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
   /* get tables */
   std::unordered_map<std::string, std::string> tables;
   const std::vector<ViewFieldMeta>* view_field_metas = view_meta.field_metas();
-  for(int i = 0; i < view_meta.field_num(); i++){
+
+  for(size_t i = 0; i < view_field_metas->size(); i++){
     ViewFieldMeta view_field_meta =  (*view_field_metas)[i];
-    if(tables.find(view_field_meta.table_name()) == tables.end()){
-      tables.insert({view_field_meta.table_name(), view_field_meta.table_name()});
+    if(std::string(view_field_meta.table_name()).find(",") != std::string::npos){
+      // std::vector<std::string> tokens;
+      std::string str = std::string(view_field_meta.table_name());
+      std::istringstream iss(str);
+      
+      std::string token;
+      while (std::getline(iss, token, ',')) {
+          // tokens.push_back(token);
+        if(tables.find(token) == tables.end()){
+          tables.insert({token, token});
+        }
+      }
+    }else{
+      if(tables.find(view_field_meta.table_name()) == tables.end()){
+        tables.insert({view_field_meta.table_name(), view_field_meta.table_name()});
+      }
     }
+    
   }
   new_select_sql.relations.swap(tables);
 
@@ -637,13 +658,30 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             query_expressions.emplace_back(std::move(expr));
           }else{
             std::string sql_text = view_field_meta->field_name();
-            // const char* field_name = sql_text.substr(sql_text.find("(")+1,
-            // sql_text.find(")") - sql_text.find("(") - 1).c_str();
+
             int lpos = sql_text.find("("), rpos = sql_text.find(")");
             char* p = (char *)malloc((rpos - lpos)*sizeof(char));
             memcpy(p, view_field_meta->field_name() + lpos + 1, rpos - lpos - 1);
             p[rpos - lpos - 1] = '\0';
-            const char* table_name = view_field_meta->table_name();
+            char* table_name = (char *)malloc(100 * sizeof(char));
+            memcpy(table_name, view_field_meta->table_name(), strlen(view_field_meta->table_name()));
+            table_name[strlen(view_field_meta->table_name())] = '\0';
+            // view_field_meta->table_name();
+
+            if(sql_text.find(".") != std::string::npos){
+              int ppos = sql_text.find(".");
+              // std::string true_table_name = sql_text.substr(lpos+1, sql_text.find(".")-lpos-1);
+              
+              p = (char *)malloc((rpos - ppos)*sizeof(char));
+              memcpy(p, view_field_meta->field_name() + ppos + 1, rpos - ppos - 1);
+              p[rpos - ppos - 1] = '\0';
+
+              table_name = (char *)malloc(100 * sizeof(char));
+              memcpy(table_name, sql_text.substr(lpos+1, ppos-lpos-1).c_str(),
+                                             ppos-lpos-1);
+              table_name[ppos-lpos-1] = '\0';
+            }
+
             UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p);
             UnboundAggregateExpr* expr = new UnboundAggregateExpr(
               sql_text.substr(0, sql_text.find("(")).c_str(), child
@@ -678,7 +716,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             if(std::string(query_field_name).find("(") != std::string::npos){
               const char* field_name = std::string(query_field_name).substr(std::string(query_field_name).find("(") + 1,
               std::string(query_field_name).find(")")- std::string(query_field_name).find("(") - 1).c_str();
-              UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+              UnboundFieldExpr* child = new UnboundFieldExpr(view_field_meta->table_name(), field_name);
               UnboundAggregateExpr* expr = new UnboundAggregateExpr(
                 std::string(query_field_name).substr(0, std::string(query_field_name).find("(")).c_str(), child
               );
@@ -686,9 +724,31 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
               query_expressions.emplace_back(std::move(expr));
             }else{
               std::string sql_text = view_field_meta->field_name();
-              const char* field_name = sql_text.substr(sql_text.find("(")+1,
-              sql_text.find(")") - sql_text.find("(") - 1).c_str();
-              UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+
+              int lpos = sql_text.find("("), rpos = sql_text.find(")");
+              char* p = (char *)malloc((rpos - lpos)*sizeof(char));
+              memcpy(p, view_field_meta->field_name() + lpos + 1, rpos - lpos - 1);
+              p[rpos - lpos - 1] = '\0';
+              char* table_name = (char *)malloc(100 * sizeof(char));
+              memcpy(table_name, view_field_meta->table_name(), strlen(view_field_meta->table_name()));
+              table_name[strlen(view_field_meta->table_name())] = '\0';
+              // view_field_meta->table_name();
+
+              if(sql_text.find(".") != std::string::npos){
+                int ppos = sql_text.find(".");
+                // std::string true_table_name = sql_text.substr(lpos+1, sql_text.find(".")-lpos-1);
+                
+                p = (char *)malloc((rpos - ppos)*sizeof(char));
+                memcpy(p, view_field_meta->field_name() + ppos + 1, rpos - ppos - 1);
+                p[rpos - ppos - 1] = '\0';
+
+                table_name = (char *)malloc(100 * sizeof(char));
+                memcpy(table_name, sql_text.substr(lpos+1, ppos-lpos-1).c_str(),
+                                              ppos-lpos-1);
+                table_name[ppos-lpos-1] = '\0';
+              }
+
+              UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p);
               UnboundAggregateExpr* expr = new UnboundAggregateExpr(
                 sql_text.substr(0, sql_text.find("(")).c_str(), child
               );

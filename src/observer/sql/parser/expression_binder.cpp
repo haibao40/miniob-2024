@@ -195,7 +195,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
   const char *table_name      = unbound_field_expr->table_name();
   const char *field_name      = unbound_field_expr->field_name();
-  const char *table_alias     = unbound_field_expr->table_alias();
+  // const char *table_alias     = unbound_field_expr->table_alias();
   const char *field_alias     = unbound_field_expr->field_alias();
   std::string field_expr_name = ""; //表达式的名字
 
@@ -208,8 +208,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
     table = context_.query_tables()[0];
   } else {
-    //有别名取别名，无别名取表名
-    field_expr_name += strcasecmp(table_name, table_alias) == 0 ? string(table_name) + "." : string(table_alias) + ".";
+
     table = context_.find_table(table_name);
     if (nullptr == table) {  //by haijun: 为了适应关联子查询，这里找不到表，就尝试创建常量表达式
       RC rc = RC::SCHEMA_TABLE_NOT_EXIST;
@@ -225,6 +224,15 @@ RC ExpressionBinder::bind_unbound_field_expression(
         GlobalVariable::curren_resolve_subquery_expr->set_is_correlated();
         bound_expressions.emplace_back(runtime_value_expr);
         return RC::SUCCESS;
+      }
+    }
+    else{
+      //有别名取别名，无别名取表名
+      // field_expr_name += strcasecmp(table_name, table_alias) == 0 ? string(table_name) + "." : string(table_alias) + ".";
+      if(strcasecmp(table->table_meta().name(), table_name) == 0){
+        field_expr_name = field_expr_name + std::string(table_name) + ".";
+      }else{
+        field_expr_name = field_expr_name + std::string(table->table_meta().name()) + ".";
       }
     }
   }
@@ -574,6 +582,7 @@ RC ExpressionBinder::bind_aggregate_expression(
   }
 
   auto aggregate_expr = make_unique<AggregateExpr>(aggregate_type, std::move(child_expr));
+
   aggregate_expr->set_expr(unbound_aggregate_expr->expr());
   aggregate_expr->set_name(unbound_aggregate_expr->name());
   rc = check_aggregate_expression(*aggregate_expr);

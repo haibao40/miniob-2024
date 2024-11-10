@@ -521,7 +521,7 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   }
 
   //处理update 中可能包含的子查询，为其创建物理计划（虽然上层查询还在创建逻辑计划，但是这里的子查询是独立的，可以直接一步到位生成物理计划）
-  for(int i = 0; i < update_stmt->update_unites().size();i++) {
+  for(size_t i = 0; i < update_stmt->update_unites().size();i++) {
     UpdateUnite& update_unite = update_stmt->update_unites()[i];
     Expression* expr = update_unite.expression;
     if(expr->type() == ExprType::SUBQUERY) {

@@ -70,7 +70,7 @@ std::string VectorIndexPhysicalOperator::param() const {
 RC VectorIndexPhysicalOperator::open(Trx *trx)
 {
   records_ = table_->ann_search(base_vector_,limit_,index_);
-  for(int i=0 ;i<records_->size();i++){
+  for(size_t i = 0 ;i < records_->size(); i++){
    Record* record = records_->at(i);
    Tuple* tuple  = get_data_from_record(table_,record);
    tuples_->push_back(tuple);
@@ -82,7 +82,7 @@ RC VectorIndexPhysicalOperator::open(Trx *trx)
 
 RC VectorIndexPhysicalOperator::next()
 {
-  if(count < limit_ && count < tuples_->size()){
+  if(count < limit_ && (size_t)count < tuples_->size()){
     return RC::SUCCESS;
   }else{
     return RC::RECORD_EOF;
