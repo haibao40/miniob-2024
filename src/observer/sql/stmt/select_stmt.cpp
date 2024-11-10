@@ -532,6 +532,8 @@ RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
   RC rc = RC::SUCCESS;
   //手搓一个selectsqlnode出来
   SelectSqlNode new_select_sql;
+  //外加一个子sql
+  ParsedSqlNode* sub_sql = new ParsedSqlNode(SqlCommandFlag::SCF_SELECT);
   //get View and ViewMeta
   //这里假设一次就查一个view
   View* view = db->find_view(select_sql.relations.begin()->first.c_str());
@@ -558,9 +560,37 @@ RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
   /* handle query_expressions */
   
   /* handle conditionss : 有两个条件需要处理，一个是view的，一个是select的，且都可能为空 */
-  std::vector<ConditionSqlNode> conditions;
-  get_conditions(db, view, conditions, select_sql.conditions);
-  new_select_sql.conditions.swap(conditions);
+  if(view_meta.child_field_num() < 1){
+    std::vector<ConditionSqlNode> conditions;
+    get_conditions(db, view, conditions, select_sql.conditions);
+    new_select_sql.conditions.swap(conditions);
+  }else{
+    std::vector<ConditionSqlNode> conditions_parents;
+    get_conditions(db, view, conditions_parents, select_sql.conditions);
+
+    std::unordered_map<std::string, std::string> tables;
+    // const std::vector<ViewFieldMeta>* view_field_metas = view_meta.child_field_metas();
+    for(int i = 0; i < view_meta.child_field_num(); i++){
+      const ViewFieldMeta* view_field_meta =  view_meta.child_field(i);
+      if(tables.find(view_field_meta->table_name()) == tables.end()){
+        tables.insert({view_field_meta->table_name(), view_field_meta->table_name()});
+      }
+    }
+    sub_sql->selection.relations.swap(tables);
+
+    std::vector<unique_ptr<Expression>> query_expressions;
+    rc = get_child_query_expressions(view, query_expressions);
+    if(rc != RC::SUCCESS) return rc;
+    sub_sql->selection.expressions.swap(query_expressions);
+
+    std::vector<ConditionSqlNode> conditions;
+    rc = get_child_conditions(db, view, conditions);
+    sub_sql->selection.conditions.swap(conditions);
+
+    conditions_parents[0].right_expr = new UnboundSubqueryExpr(std::move(sub_sql));
+    new_select_sql.conditions.swap(conditions_parents);
+  }
+  
   /* handle conditionss */
 
   return create(db, new_select_sql, stmt);
@@ -576,6 +606,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
         auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
         const char* query_field_name = unbound_field_expr->field_name(); //拿个名字
         const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+        if(view_field_meta == nullptr) return RC::UNSUPPORTED;
 
         if(view_field_meta->type() == ExprType::FIELD){
           UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
@@ -613,7 +644,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             memcpy(p, view_field_meta->field_name() + lpos + 1, rpos - lpos - 1);
             p[rpos - lpos - 1] = '\0';
             const char* table_name = view_field_meta->table_name();
-            UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p, p);
+            UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p);
             UnboundAggregateExpr* expr = new UnboundAggregateExpr(
               sql_text.substr(0, sql_text.find("(")).c_str(), child
             );
@@ -723,6 +754,7 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
       Table* table = db->find_table(view_con_meta->left_table_name());
       const FieldMeta* field_meta = table->table_meta().field(view_con_meta->left_field_name());
       FieldExpr* expr = new FieldExpr(table, field_meta);
+      expr->set_name(field_meta->name());
       condition.left_expr = expr;
     }else{
       ValueExpr* expr = new ValueExpr(Value(view_con_meta->left_value()));
@@ -734,6 +766,7 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
       Table* table = db->find_table(view_con_meta->right_table_name());
       const FieldMeta* field_meta = table->table_meta().field(view_con_meta->right_field_name());
       FieldExpr* expr = new FieldExpr(table, field_meta);
+      expr->set_name(field_meta->name());
       condition.right_expr = expr;
     }else{
       ValueExpr* expr = new ValueExpr(Value(view_con_meta->right_value()));
@@ -743,13 +776,14 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
     conditions.emplace_back(condition);
   }
 
-  for(int i = 0; i < true_conditions.size(); i++){
+  for(size_t i = 0; i < true_conditions.size(); i++){
     ConditionSqlNode condition = true_conditions[i];
     condition.left_is_expr = 1;
 
     if(condition.left_is_attr){
       const char* query_field_name = condition.left_attr.attribute_name.c_str(); //拿个名字
       const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+      if(view_field_meta == nullptr) return RC::UNSUPPORTED;
 
       if(view_field_meta->type() == ExprType::FIELD){
         UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
@@ -776,6 +810,7 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
       UnboundFieldExpr* unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
       const char* query_field_name = unbound_field_expr->field_name() ; //拿个名字
       const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+      if(view_field_meta == nullptr) return RC::UNSUPPORTED;
 
       if(view_field_meta->type() == ExprType::FIELD){
         UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
@@ -795,6 +830,98 @@ RC SelectStmt::get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> 
         condition.right_expr = expr;
       }
     }
+    conditions.emplace_back(condition);
+  }
+  return RC::SUCCESS;
+}
+
+RC SelectStmt::get_child_query_expressions(View *view, std::vector<unique_ptr<Expression>> &query_expressions){
+  ViewMeta view_meta = view->view_meta();
+
+  for(int i = 0; i < view_meta.child_field_num(); i++){
+    const ViewFieldMeta *view_field_meta = view_meta.child_field(i);
+    const char* query_field_name = view_field_meta->name();
+
+    if(view_field_meta->type() == ExprType::FIELD){
+      UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
+      view_field_meta->field_name(), query_field_name);
+      expr->set_name(query_field_name);
+      query_expressions.emplace_back(std::move(expr));
+    }  
+    else if(view_field_meta->type() == ExprType::ARITHMETIC){
+      BinderContext binder_context;
+      ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+      size_t pos = 0;
+      //如果表达式有多个表的字段，暂时干不了这活
+      ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+          pos, view_field_meta->table_name()));
+      expr->set_name(query_field_name);
+      query_expressions.emplace_back(std::move(expr));
+    }
+    else if(view_field_meta->type()  == ExprType::AGGREGATION){
+      if(std::string(query_field_name).find("(") != std::string::npos){
+        const char* field_name = std::string(query_field_name).substr(std::string(query_field_name).find("(") + 1,
+        std::string(query_field_name).find(")")- std::string(query_field_name).find("(") - 1).c_str();
+        UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+        UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+        std::string(query_field_name).substr(0, std::string(query_field_name).find("(")).c_str(), child
+        );
+        expr->set_name(query_field_name);
+        query_expressions.emplace_back(std::move(expr));
+      }else{
+        std::string sql_text = view_field_meta->field_name();
+        const char* field_name = sql_text.substr(sql_text.find("(")+1,
+        sql_text.find(")") - sql_text.find("(") - 1).c_str();
+        UnboundFieldExpr* child = new UnboundFieldExpr("", field_name);
+        UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+          sql_text.substr(0, sql_text.find("(")).c_str(), child
+        );
+        expr->set_name(query_field_name);
+        query_expressions.emplace_back(std::move(expr));
+      }
+    }
+         
+  }
+    
+  
+    return RC::SUCCESS;
+}
+
+RC SelectStmt::get_child_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions){
+  const ViewMeta view_meta = view->view_meta();
+
+  for(int i = 0; i < view_meta.child_con_num(); i++){
+    const ConditionMeta *view_con_meta = view_meta.child_con(i);
+    ConditionSqlNode condition;
+    condition.comp = view_con_meta->comp();
+    condition.left_is_expr = 1;
+    condition.right_is_expr = 1;
+
+    //将左表达式初始化过滤单元
+    if(view_con_meta->left_is_attr()){
+      Table* table = db->find_table(view_con_meta->left_table_name());
+      const FieldMeta* field_meta = table->table_meta().field(view_con_meta->left_field_name());
+      FieldExpr* expr = new FieldExpr(table, field_meta);
+      expr->set_name(field_meta->name());
+      condition.left_expr = expr;
+    }else{
+      ValueExpr* expr = new ValueExpr(Value(view_con_meta->left_value()));
+      condition.left_expr = expr;
+    }
+
+    //将右表达式初始化过滤单元
+    if(view_con_meta->right_is_attr()){
+      Table* table = db->find_table(view_con_meta->right_table_name());
+      const FieldMeta* field_meta = table->table_meta().field(view_con_meta->right_field_name());
+      FieldExpr* expr = new FieldExpr(table, field_meta);
+      expr->set_name(field_meta->name());
+      condition.right_expr = expr;
+    }else{
+      ValueExpr* expr = new ValueExpr(Value(view_con_meta->right_value()));
+      condition.right_expr = expr;
+    }
+
     conditions.emplace_back(condition);
   }
   return RC::SUCCESS;

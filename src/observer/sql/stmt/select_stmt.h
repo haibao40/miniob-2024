@@ -91,4 +91,8 @@ public:
 
   static RC get_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions,
   std::vector<ConditionSqlNode> &true_conditions);
+
+  static RC get_child_query_expressions(View *view, std::vector<unique_ptr<Expression>> &query_expressions);
+
+  static RC get_child_conditions(Db* db, View *view, std::vector<ConditionSqlNode> &conditions);
 };

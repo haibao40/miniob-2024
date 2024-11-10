@@ -324,6 +324,56 @@ int ViewMeta::deserialize(std::istream &is)
         }
     }
   }
+
+   const Json::Value &child_fields_value = view_value[CHILD_VIEW_FIELDS];
+    std::vector<ViewFieldMeta> child_fields;
+    
+    if(!child_fields_value.isNull()){
+        if (!child_fields_value.isArray() || child_fields_value.size() <= 0) {
+            LOG_ERROR("Invalid view meta. view cons is not array, json value=%s", child_fields_value.toStyledString().c_str());
+            return -1;
+        }
+
+        rc        = RC::SUCCESS;
+        int child_field_num = child_fields_value.size();
+
+        child_fields.resize(child_field_num);
+        for (int i = 0; i < child_field_num; i++) {
+            ViewFieldMeta &field = child_fields[i];
+
+            const Json::Value &field_value = child_fields_value[i];
+            rc                             = ViewFieldMeta::from_json(field_value, field);
+            if (rc != RC::SUCCESS) {
+            LOG_ERROR("Failed to deserialize view meta. view name =%s", view_name.c_str());
+            return -1;
+            }
+        }
+    }
+
+    const Json::Value &child_cons_value = view_value[CHILD_VIEW_CONS];
+    std::vector<ConditionMeta> child_cons;
+    
+    if(!child_cons_value.isNull()){
+        if (!child_cons_value.isArray() || child_cons_value.size() <= 0) {
+            LOG_ERROR("Invalid view meta. view cons is not array, json value=%s", child_cons_value.toStyledString().c_str());
+            return -1;
+        }
+
+        rc        = RC::SUCCESS;
+        int child_con_num = cons_value.size();
+
+        child_cons.resize(child_con_num);
+        for (int i = 0; i < child_con_num; i++) {
+            ConditionMeta &con = child_cons[i];
+
+            const Json::Value &con_value = child_cons_value[i];
+            rc                             = ConditionMeta::from_json(con_value, con);
+            if (rc != RC::SUCCESS) {
+            LOG_ERROR("Failed to deserialize view meta. view name =%s", view_name.c_str());
+            return -1;
+            }
+        }
+    }
   
 
 //   auto comparator = [](const FieldMeta &f1, const FieldMeta &f2) { return f1.offset() < f2.offset(); };
@@ -333,6 +383,8 @@ int ViewMeta::deserialize(std::istream &is)
   name_.swap(view_name);
   view_fields_.swap(fields);
   view_cons_.swap(cons);
+  child_fields_.swap(child_fields);
+  child_cons_.swap(child_cons);
 
   return (int)(is.tellg() - old_pos);
 }
@@ -348,7 +400,8 @@ bool ViewMeta::insert_capacity(){
     }
     const char* table_name = view_fields_[0].table_name();
     for(size_t i = 1; i < view_fields_.size(); i++){
-        if(strcasecmp(table_name, view_fields_[i].table_name()) != 0){
+        if(strcasecmp(table_name, view_fields_[i].table_name()) != 0 
+        ||view_fields_[i].type() != ExprType::FIELD){
             res = false;
             break;
         }
