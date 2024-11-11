@@ -1167,7 +1167,11 @@ rel_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$2, $1});
+      if($$->find($2) != $$->end()){
+        $$->insert($$->begin(), {"", ""});
+      }else{
+        $$->insert($$->begin(), {$2, $1});
+      }
       free($1);
       free($2);
     }
