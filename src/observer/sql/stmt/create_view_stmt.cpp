@@ -16,7 +16,7 @@ std::unordered_map<std::string, std::string> table_names2table_alias;
 RC CreateViewStmt::create(Db *db, const CreateViewSqlNode &create_view, Stmt *&stmt)
 {
   CreateViewStmt *create_view_stmt = new CreateViewStmt(create_view.view_name);
-  const char* table_name = create_view.sql_node->selection.relations.begin()->first.c_str();
+  const char* table_name = create_view.sql_node->selection.relations.begin()->second.c_str();
   default_table = db->find_table(table_name);
   table_names2table_alias = create_view.sql_node->selection.relations;
 
@@ -111,9 +111,9 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
         std::string str = std::string(expr->expr()).substr(0, pos-1);
         for(auto name2alias:table_names2table_alias){
           if(name2alias.first != name2alias.second){
-            if (str.find(name2alias.second) != std::string::npos)
+            if (str.find(name2alias.first) != std::string::npos)
             {
-              str = str.replace(str.find(name2alias.second), name2alias.second.length(), name2alias.first);
+              str = str.replace(str.find(name2alias.first), name2alias.first.length(), name2alias.second);
             }
           }
         }
@@ -138,11 +138,11 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
       std::string str = attr_info.field_name;
       std::string table_names = "";
       for(auto name2alias:table_names2table_alias){
-        table_names += name2alias.first + ",";
+        table_names += name2alias.second + ",";
         if(name2alias.first != name2alias.second){
-          if (str.find(name2alias.second) != std::string::npos)
+          if (str.find(name2alias.first) != std::string::npos)
           {
-            str = str.replace(str.find(name2alias.second), name2alias.second.length(), name2alias.first);
+            str = str.replace(str.find(name2alias.first), name2alias.first.length(), name2alias.second);
           }
         }
       }

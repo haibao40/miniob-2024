@@ -3405,7 +3405,7 @@ yyreduce:
 #line 1142 "yacc_sql.y"
                     {
       (yyval.relation_list) = new std::unordered_map<std::string, std::string>();
-      (yyval.relation_list)->insert({(yyvsp[-2].string), (yyvsp[0].string)});
+      (yyval.relation_list)->insert({(yyvsp[0].string), (yyvsp[-2].string)});
       free((yyvsp[-2].string));
       free((yyvsp[0].string));
     }
@@ -3416,7 +3416,7 @@ yyreduce:
 #line 1148 "yacc_sql.y"
                  {
       (yyval.relation_list) = new std::unordered_map<std::string, std::string>();
-      (yyval.relation_list)->insert({(yyvsp[-1].string), (yyvsp[0].string)});
+      (yyval.relation_list)->insert({(yyvsp[0].string), (yyvsp[-1].string)});
       free((yyvsp[-1].string));
       free((yyvsp[0].string));
     }
@@ -3431,7 +3431,7 @@ yyreduce:
       } else {
         (yyval.relation_list) = new std::unordered_map<std::string, std::string>();
       }
-      (yyval.relation_list)->insert((yyval.relation_list)->begin(), {(yyvsp[-4].string), (yyvsp[-2].string)});
+      (yyval.relation_list)->insert((yyval.relation_list)->begin(), {(yyvsp[-2].string), (yyvsp[-4].string)});
       free((yyvsp[-4].string));
       free((yyvsp[-2].string));
     }
@@ -3446,7 +3446,7 @@ yyreduce:
       } else {
         (yyval.relation_list) = new std::unordered_map<std::string, std::string>();
       }
-      (yyval.relation_list)->insert((yyval.relation_list)->begin(), {(yyvsp[-3].string), (yyvsp[-2].string)});
+      (yyval.relation_list)->insert((yyval.relation_list)->begin(), {(yyvsp[-2].string), (yyvsp[-3].string)});
       free((yyvsp[-3].string));
       free((yyvsp[-2].string));
     }
@@ -3481,7 +3481,7 @@ yyreduce:
                                                 {
     (yyval.join_list) = new std::unordered_map<std::string, std::string>();
     join_conditions.push_back((yyvsp[0].condition_list));
-    (yyval.join_list)->insert({(yyvsp[-4].string), (yyvsp[-2].string)});
+    (yyval.join_list)->insert({(yyvsp[-2].string), (yyvsp[-4].string)});
   }
 #line 3487 "yacc_sql.cpp"
     break;
@@ -3503,7 +3503,7 @@ yyreduce:
     (yyval.join_list) = new std::unordered_map<std::string, std::string>();
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
     join_conditions.push_back(temp);
-    (yyval.join_list)->insert({(yyvsp[-2].string),(yyvsp[0].string)});
+    (yyval.join_list)->insert({(yyvsp[0].string),(yyvsp[-2].string)});
   }
 #line 3509 "yacc_sql.cpp"
     break;
@@ -3534,7 +3534,7 @@ yyreduce:
       } else {
         (yyval.join_list) = new std::unordered_map<std::string, std::string>();
       }
-      (yyval.join_list)->insert((yyval.join_list)->begin(), {(yyvsp[-3].string), (yyvsp[-1].string)});
+      (yyval.join_list)->insert((yyval.join_list)->begin(), {(yyvsp[-1].string), (yyvsp[-3].string)});
       free((yyvsp[-3].string));
       free((yyvsp[-1].string));
   }
@@ -3565,7 +3565,7 @@ yyreduce:
       } else {
         (yyval.join_list) = new std::unordered_map<std::string, std::string>();
       }
-      (yyval.join_list)->insert((yyval.join_list)->begin(), {(yyvsp[-5].string), (yyvsp[-3].string)});
+      (yyval.join_list)->insert((yyval.join_list)->begin(), {(yyvsp[-3].string), (yyvsp[-5].string)});
       free((yyvsp[-5].string));
       free((yyvsp[-3].string));
   }
@@ -3594,7 +3594,7 @@ yyreduce:
     } else{
       (yyval.join_list) = new std::unordered_map<std::string, std::string>();
     }
-    (yyval.join_list)->insert((yyval.join_list)->begin(), {(yyvsp[-3].string), (yyvsp[-1].string)});
+    (yyval.join_list)->insert((yyval.join_list)->begin(), {(yyvsp[-1].string), (yyvsp[-3].string)});
     free((yyvsp[-3].string));
     free((yyvsp[-1].string));
   }

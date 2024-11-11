@@ -35,8 +35,8 @@ Table *BinderContext::find_table(const char *table_name) const
   }
 
   for(auto it: table_name2table_alias_){
-    if(0 == strcasecmp(it.second.c_str(), table_name)){
-      return find_table(it.first.c_str());
+    if(0 == strcasecmp(it.first.c_str(), table_name)){
+      return find_table(it.second.c_str());
     }
   }
   return nullptr;

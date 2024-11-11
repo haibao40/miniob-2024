@@ -114,7 +114,7 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
         if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
           const char* table_name = pair.second->name();
           unbound_field_expr->set_table_name(table_name);
-          binder_context.add_table_alias(table_name, unbound_field_expr->table_name());
+          binder_context.add_table_alias(unbound_field_expr->table_name(), table_name);
           break;
         }
       }

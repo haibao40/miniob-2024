@@ -56,7 +56,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   }
   //如果查询的是视图
   for(auto it:select_sql.relations){
-    if(db->find_view(it.first.c_str()) != nullptr){
+    if(db->find_view(it.second.c_str()) != nullptr){
       return create_with_view(db, select_sql, stmt);
     }
   }
@@ -96,11 +96,11 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    binder_context.add_table_alias(table_name, it->second.c_str());
+    binder_context.add_table_alias(it->first.c_str(), it->second.c_str());
     binder_context.add_table(table);
     tables.push_back(table);
-    // table_map.insert({table_name, table});
-    table_map.insert({it->second, table});
+    table_map.insert({table_name, table});
+    table_map.insert({it->first, table});
   }
   //李晓鹏 这里是处理未绑定的问题 将unbound... Expr 转化为 普通的expr
   // collect query fields in `select` statement 
@@ -112,8 +112,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     if(expression.get()->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
-          unbound_field_expr->set_table_name(pair.first);
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.second);
           break;
         }
       }
@@ -140,8 +140,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.left_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
-          unbound_field_expr->set_table_name(pair.first);
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.second);
           break;
         }
       }
@@ -149,8 +149,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
-          unbound_field_expr->set_table_name(pair.first);
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.second);
           break;
         }
       }
@@ -290,7 +290,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     auto it = select_sql.relations.begin(); // 获取指向第一个元素的迭代器
     std::advance(it, i);
-    const char *table_name = it->first.c_str();
+    const char *table_name = it->second.c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -302,11 +302,11 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    binder_context.add_table_alias(table_name, it->second.c_str());
+    binder_context.add_table_alias(it->first.c_str(), it->second.c_str());
     binder_context.add_table(table);
     tables.push_back(table);
-    // table_map.insert({table_name, table});
-    table_map.insert({it->second, table});
+    table_map.insert({table_name, table});
+    table_map.insert({it->first, table});
   }
   //李晓鹏 这里是处理未绑定的问题 将unbound... Expr 转化为 普通的expr
   // collect query fields in `select` statement 
@@ -318,8 +318,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     if(expression.get()->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
-          unbound_field_expr->set_table_name(pair.first);
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.second);
           break;
         }
       }
@@ -346,8 +346,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.left_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
-          unbound_field_expr->set_table_name(pair.first);
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.second);
           break;
         }
       }
@@ -355,8 +355,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
-          unbound_field_expr->set_table_name(pair.first);
+        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
+          unbound_field_expr->set_table_name(pair.second);
           break;
         }
       }
@@ -460,6 +460,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->order_by_.swap(order_by_expressions);
   select_stmt->join_filter_.swap(join_filter);
+  select_stmt->limit_count_ = select_sql.limit_count;
   stmt                      = select_stmt;
   GlobalVariable::curren_resolve_select_stmt = select_stmt->parent_;   //回溯,因为可能存在一个外层查询有多个子查询的情况
   return RC::SUCCESS;
@@ -470,17 +471,17 @@ RC SelectStmt::add_table_and_field_info_to_scope(Db *db, SelectSqlNode &select_s
   vector<Table *> tables; //用来记录这个select用到的所有表
   //将表及其别名的信息添加进入当前查询对应的作用域
   for (const auto &table_name2alias_pair : select_sql.relations) {
-    Table* table = db->find_table(table_name2alias_pair.first.c_str());
+    Table* table = db->find_table(table_name2alias_pair.second.c_str());
     if(table == nullptr) {
-      LOG_WARN("要查找的表不存在，table_name:%s", table_name2alias_pair.first.c_str());
+      LOG_WARN("要查找的表不存在，table_name:%s", table_name2alias_pair.second.c_str());
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
-    if(stmt->scope_->name2table.find(table_name2alias_pair.second) != stmt->scope_->name2table.end()) {
+    if(stmt->scope_->name2table.find(table_name2alias_pair.first) != stmt->scope_->name2table.end()) {
       LOG_WARN("别名已经存在，在同一层的查询中使用了重复的别名，sql不合法");
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
-    stmt->scope_->name2table[table_name2alias_pair.first] = table;  // 添加<表名，表对象>的映射
-    stmt->scope_->name2table[table_name2alias_pair.second] = table; // 添加<表别名，表对象>的映射
+    stmt->scope_->name2table[table_name2alias_pair.second] = table;  // 添加<表名，表对象>的映射
+    stmt->scope_->name2table[table_name2alias_pair.first] = table; // 添加<表别名，表对象>的映射
     tables.push_back(table);
   }
 
@@ -541,7 +542,7 @@ RC SelectStmt::create_with_view(Db *db, SelectSqlNode &select_sql, Stmt *&stmt){
   ParsedSqlNode* sub_sql = new ParsedSqlNode(SqlCommandFlag::SCF_SELECT);
   //get View and ViewMeta
   //这里假设一次就查一个view
-  View* view = db->find_view(select_sql.relations.begin()->first.c_str());
+  View* view = db->find_view(select_sql.relations.begin()->second.c_str());
   ViewMeta view_meta = view->view_meta();
 
   /* get tables */
