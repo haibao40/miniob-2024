@@ -761,6 +761,9 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
       }else if(expression.get()->type() == ExprType::UNBOUND_AGGREGATION){
         auto unbound_agg_expr = static_cast<UnboundAggregateExpr *>(expression.get());
         Expression* child = nullptr;
+        std::string sss;
+
+        bool flag = false;
         bool has_agg = false;
         if(unbound_agg_expr->child().get()->type() == ExprType::UNBOUND_FIELD){
           auto child_expr = static_cast<UnboundFieldExpr* >(unbound_agg_expr->child().get());
@@ -785,6 +788,10 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
             expr->set_name(query_field_name);
             child = expr;
           }
+          else if(view_field_meta->type() == ExprType::AGGREGATION){
+            sss = view_field_meta->name();
+            flag = true;
+          }
         }
         else if(unbound_agg_expr->child().get()->type() == ExprType::STAR){
           child = new StarExpr();
@@ -805,7 +812,75 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
         if(has_agg){
           expr->set_flag();
         }
-        query_expressions.emplace_back(expr);
+        if(flag){
+          const char* query_field_name = sss.c_str(); //拿个名字
+          const ViewFieldMeta *view_field_meta = view_meta.field(query_field_name); //根据名字找到对应的元数据
+          if(view_field_meta == nullptr) return RC::UNSUPPORTED;
+
+          if(view_field_meta->type() == ExprType::FIELD){
+            UnboundFieldExpr* expr = new UnboundFieldExpr(view_field_meta->table_name(),
+            view_field_meta->field_name(), query_field_name);
+            expr->set_name(query_field_name);
+            query_expressions.emplace_back(std::move(expr));
+          }  
+          else if(view_field_meta->type() == ExprType::ARITHMETIC){
+            BinderContext binder_context;
+            ExpressionBinder expression_binder(binder_context); //不干啥，就是调用了下函数
+
+            size_t pos = 0;
+            //如果表达式有多个表的字段，暂时干不了这活
+            ArithmeticExpr* expr = static_cast<ArithmeticExpr *>(expression_binder.parseExpression(view_field_meta->field_name(),
+            pos, view_field_meta->table_name()));
+            expr->set_name(query_field_name);
+            query_expressions.emplace_back(std::move(expr));
+          }
+          else if(view_field_meta->type()  == ExprType::AGGREGATION){
+            if(std::string(query_field_name).find("(") != std::string::npos){
+              const char* field_name = std::string(query_field_name).substr(std::string(query_field_name).find("(") + 1,
+              std::string(query_field_name).find(")")- std::string(query_field_name).find("(") - 1).c_str();
+              UnboundFieldExpr* child = new UnboundFieldExpr(view_field_meta->table_name(), field_name);
+              UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+                std::string(query_field_name).substr(0, std::string(query_field_name).find("(")).c_str(), child
+              );
+              expr->set_name(query_field_name);
+              query_expressions.emplace_back(std::move(expr));
+            }else{
+              std::string sql_text = view_field_meta->field_name();
+
+              int lpos = sql_text.find("("), rpos = sql_text.find(")");
+              char* p = (char *)malloc((rpos - lpos)*sizeof(char));
+              memcpy(p, view_field_meta->field_name() + lpos + 1, rpos - lpos - 1);
+              p[rpos - lpos - 1] = '\0';
+              char* table_name = (char *)malloc(100 * sizeof(char));
+              memcpy(table_name, view_field_meta->table_name(), strlen(view_field_meta->table_name()));
+              table_name[strlen(view_field_meta->table_name())] = '\0';
+              // view_field_meta->table_name();
+
+              if(sql_text.find(".") != std::string::npos){
+                int ppos = sql_text.find(".");
+                // std::string true_table_name = sql_text.substr(lpos+1, sql_text.find(".")-lpos-1);
+                
+                p = (char *)malloc((rpos - ppos)*sizeof(char));
+                memcpy(p, view_field_meta->field_name() + ppos + 1, rpos - ppos - 1);
+                p[rpos - ppos - 1] = '\0';
+
+                table_name = (char *)malloc(100 * sizeof(char));
+                memcpy(table_name, sql_text.substr(lpos+1, ppos-lpos-1).c_str(),
+                                              ppos-lpos-1);
+                table_name[ppos-lpos-1] = '\0';
+              }
+
+              UnboundFieldExpr* child = new UnboundFieldExpr(table_name, p);
+              UnboundAggregateExpr* expr = new UnboundAggregateExpr(
+                sql_text.substr(0, sql_text.find("(")).c_str(), child
+              );
+              expr->set_name(query_field_name);
+              query_expressions.emplace_back(std::move(expr));
+            }
+          }
+        }else{
+          query_expressions.emplace_back(expr);
+        }
       }
     }
   
