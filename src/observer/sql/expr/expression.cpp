@@ -705,7 +705,8 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     } break;
 
     case Type::DIV: {
-      if(right_value.get_int() == 0 || right_value.get_float() == 0){
+      if((right_value.attr_type() == AttrType::INTS && right_value.get_int() == 0) ||
+        (right_value.attr_type() == AttrType::FLOATS && right_value.get_float() == 0)){
         return RC::DIVIDE_ZERO;
       }
       Value::divide(left_value, right_value, value);
