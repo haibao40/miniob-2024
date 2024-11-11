@@ -112,9 +112,9 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     if(expression.get()->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+        if(pair.second.find(std::string(unbound_field_expr->table_name())) != std::string::npos){
           unbound_field_expr->set_table_name(pair.first);
-          break;
+          break;//strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0
         }
       }
     }
@@ -140,7 +140,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.left_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+        if(pair.second.find(std::string(unbound_field_expr->table_name())) != std::string::npos){
           unbound_field_expr->set_table_name(pair.first);
           break;
         }
@@ -149,7 +149,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+        if(pair.second.find(std::string(unbound_field_expr->table_name())) != std::string::npos){
           unbound_field_expr->set_table_name(pair.first);
           break;
         }
@@ -318,9 +318,9 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     if(expression.get()->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(expression.get());
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+        if(pair.second.find(std::string(unbound_field_expr->table_name())) != std::string::npos){
           unbound_field_expr->set_table_name(pair.first);
-          break;
+          break;//strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0
         }
       }
     }
@@ -346,7 +346,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     if(condition.left_is_expr && condition.left_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.left_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+        if(pair.second.find(std::string(unbound_field_expr->table_name())) != std::string::npos){
           unbound_field_expr->set_table_name(pair.first);
           break;
         }
@@ -355,7 +355,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     if(condition.right_is_expr && condition.right_expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(condition.right_expr);
       for(const auto& pair : select_sql.relations){
-        if(strcasecmp(pair.second.c_str(), unbound_field_expr->table_name()) == 0){
+        if(pair.second.find(std::string(unbound_field_expr->table_name())) != std::string::npos){
           unbound_field_expr->set_table_name(pair.first);
           break;
         }
@@ -460,6 +460,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->order_by_.swap(order_by_expressions);
   select_stmt->join_filter_.swap(join_filter);
+  select_stmt->limit_count_ = select_sql.limit_count;
   stmt                      = select_stmt;
   GlobalVariable::curren_resolve_select_stmt = select_stmt->parent_;   //回溯,因为可能存在一个外层查询有多个子查询的情况
   return RC::SUCCESS;

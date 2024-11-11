@@ -61,7 +61,15 @@ RC get_table_and_field(Db *db, Table *default_table, std::unordered_map<std::str
   if (common::is_blank(attr.relation_name.c_str())) {
     table = default_table;
   } else if (nullptr != tables) {
-    auto iter = tables->find(attr.relation_name);
+    // auto iter = tables->find(attr.relation_name);
+
+    auto iter = tables->begin();
+    for(; iter != tables->end(); iter++){
+      if(iter->first.find(attr.relation_name) != std::string::npos){
+        break;
+      }
+    }
+
     if (iter != tables->end()) {
       table = iter->second;
     }
@@ -111,8 +119,8 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     if(filter_obj.expr->type() == ExprType::UNBOUND_FIELD){
       auto unbound_field_expr = static_cast<UnboundFieldExpr *>(filter_obj.expr.get());
       for(const auto& pair : *tables){
-        if(strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0){
-          const char* table_name = pair.second->name();
+        if(pair.first.find(unbound_field_expr->table_name()) != std::string::npos){
+          const char* table_name = pair.second->name();//strcasecmp(pair.first.c_str(), unbound_field_expr->table_name()) == 0
           unbound_field_expr->set_table_name(table_name);
           binder_context.add_table_alias(table_name, unbound_field_expr->table_name());
           break;

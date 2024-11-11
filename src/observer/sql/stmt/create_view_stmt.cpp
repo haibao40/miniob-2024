@@ -115,6 +115,19 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
             {
               str = str.replace(str.find(name2alias.second), name2alias.second.length(), name2alias.first);
             }
+            if(name2alias.second.find(",") != std::string::npos){
+              std::string str_tmp = name2alias.second;
+              std::istringstream iss(str_tmp);
+              
+              std::string token;
+              while (std::getline(iss, token, ',')) {
+                  // tokens.push_back(token);
+                if (str.find(token) != std::string::npos)
+                {
+                  str = str.replace(str.find(token), token.length(), name2alias.first);
+                }
+              }
+            }
           }
         }
 
@@ -143,6 +156,19 @@ RC CreateViewStmt::get_attr_infos(Db *db, vector<unique_ptr<Expression>> &query_
           if (str.find(name2alias.second) != std::string::npos)
           {
             str = str.replace(str.find(name2alias.second), name2alias.second.length(), name2alias.first);
+          }
+          if(name2alias.second.find(",") != std::string::npos){
+            std::string str_tmp = name2alias.second;
+            std::istringstream iss(str_tmp);
+              
+            std::string token;
+            while (std::getline(iss, token, ',')) {
+              // tokens.push_back(token);
+              if (str.find(token) != std::string::npos)
+              {
+                str = str.replace(str.find(token), token.length(), name2alias.first);
+              }
+            }
           }
         }
       }

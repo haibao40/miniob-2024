@@ -1157,7 +1157,11 @@ rel_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$1, $3});
+      if($$->find(std::string($1)) != $$->end()){
+        (*$$)[std::string($1)] += "," + std::string($3);
+      }else{
+        $$->insert($$->begin(), {$1, $3});
+      }
       free($1);
       free($3);
     }
@@ -1167,7 +1171,11 @@ rel_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$1, $2});
+      if($$->find(std::string($1)) != $$->end()){
+        (*$$)[std::string($1)] += "," + std::string($2);
+      }else{
+        $$->insert($$->begin(), {$1, $2});
+      }
       free($1);
       free($2);
     }
