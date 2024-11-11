@@ -1141,13 +1141,13 @@ rel_list:
     }
     | relation AS ID{
       $$ = new std::unordered_map<std::string, std::string>();
-      $$->insert({$1, $3});
+      $$->insert({$3, $1});
       free($1);
       free($3);
     }
     | relation ID{
       $$ = new std::unordered_map<std::string, std::string>();
-      $$->insert({$1, $2});
+      $$->insert({$2, $1});
       free($1);
       free($2);
     }
@@ -1157,7 +1157,7 @@ rel_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$1, $3});
+      $$->insert($$->begin(), {$3, $1});
       free($1);
       free($3);
     }
@@ -1167,7 +1167,7 @@ rel_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$1, $2});
+      $$->insert($$->begin(), {$2, $1});
       free($1);
       free($2);
     }
@@ -1191,7 +1191,7 @@ join_in_right_list:
   | INNER JOIN relation AS ID ON condition_list {
     $$ = new std::unordered_map<std::string, std::string>();
     join_conditions.push_back($7);
-    $$->insert({$3, $5});
+    $$->insert({$5, $3});
   }
   | INNER JOIN  relation {
     $$ = new std::unordered_map<std::string, std::string>();
@@ -1203,7 +1203,7 @@ join_in_right_list:
     $$ = new std::unordered_map<std::string, std::string>();
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
     join_conditions.push_back(temp);
-    $$->insert({$3,$5});
+    $$->insert({$5,$3});
   }
   | INNER JOIN  relation join_in_right_list{
     std::vector<ConditionSqlNode>* temp = new std::vector<ConditionSqlNode>();
@@ -1224,7 +1224,7 @@ join_in_right_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$3, $5});
+      $$->insert($$->begin(), {$5, $3});
       free($3);
       free($5);
   }
@@ -1245,7 +1245,7 @@ join_in_right_list:
       } else {
         $$ = new std::unordered_map<std::string, std::string>();
       }
-      $$->insert($$->begin(), {$3, $5});
+      $$->insert($$->begin(), {$5, $3});
       free($3);
       free($5);
   }
@@ -1267,7 +1267,7 @@ join_in:
     } else{
       $$ = new std::unordered_map<std::string, std::string>();
     }
-    $$->insert($$->begin(), {$1, $3});
+    $$->insert($$->begin(), {$3, $1});
     free($1);
     free($3);
   }

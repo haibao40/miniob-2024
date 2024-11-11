@@ -84,7 +84,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     auto it = select_sql.relations.begin(); // 获取指向第一个元素的迭代器
     std::advance(it, i);
-    const char *table_name = it->first.c_str();
+    const char *table_name = it->second.c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
