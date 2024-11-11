@@ -60,6 +60,14 @@ class AvgAggregator : public Aggregator{
 
 class CountAggregator : public Aggregator{
   public:
+    CountAggregator() = default;
+    CountAggregator(bool flag){
+      if(flag){
+        set_count1();
+      }
+    }
+    bool count_1 = false;
+    void set_count1();
     RC accumulate(const Value &value) override;
     RC evaluate(Value &result) override;
 };

@@ -963,7 +963,11 @@ unique_ptr<Aggregator> AggregateExpr::create_aggregator() const
       break;
     }
     case Type::COUNT: {
-      aggregator = make_unique<CountAggregator>();
+      if(count1_){
+        aggregator = make_unique<CountAggregator>(true);
+      }else{
+        aggregator = make_unique<CountAggregator>();
+      }
       break;
     }
     default: {

@@ -548,6 +548,8 @@ RC ExpressionBinder::bind_aggregate_expression(
 
   auto unbound_aggregate_expr = static_cast<UnboundAggregateExpr *>(expr.get());
   const char *aggregate_name = unbound_aggregate_expr->aggregate_name();
+  bool flag = unbound_aggregate_expr->flag();
+
   AggregateExpr::Type aggregate_type;
   RC rc = AggregateExpr::type_from_string(aggregate_name, aggregate_type);
   if (OB_FAIL(rc)) {
@@ -583,6 +585,9 @@ RC ExpressionBinder::bind_aggregate_expression(
 
   auto aggregate_expr = make_unique<AggregateExpr>(aggregate_type, std::move(child_expr));
 
+  if(flag){
+    aggregate_expr.get()->set_count1();
+  }
   aggregate_expr->set_expr(unbound_aggregate_expr->expr());
   aggregate_expr->set_name(unbound_aggregate_expr->name());
   rc = check_aggregate_expression(*aggregate_expr);

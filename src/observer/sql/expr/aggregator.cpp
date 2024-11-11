@@ -154,11 +154,20 @@ RC CountAggregator::accumulate(const Value &value)
 RC CountAggregator::evaluate(Value &result)
 {
   if(value_.attr_type() == AttrType::UNDEFINED){
-    Value zero(0);
-    result = zero;
+    if(count_1){
+      Value one(1);
+      result = one;
+    }else{
+      Value zero(0);
+      result = zero;
+    }
     return RC::SUCCESS;
   }
 
   result = value_;
   return RC::SUCCESS;
+}
+
+void CountAggregator::set_count1(){
+  count_1 = true;
 }

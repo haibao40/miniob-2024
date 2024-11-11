@@ -305,7 +305,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, SelectStmt *&stmt)
     binder_context.add_table_alias(it->first.c_str(), it->second.c_str());
     binder_context.add_table(table);
     tables.push_back(table);
-    table_map.insert({table_name, table});
+    // table_map.insert({table_name, table});
     table_map.insert({it->first, table});
   }
   //李晓鹏 这里是处理未绑定的问题 将unbound... Expr 转化为 普通的expr
@@ -761,6 +761,7 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
       }else if(expression.get()->type() == ExprType::UNBOUND_AGGREGATION){
         auto unbound_agg_expr = static_cast<UnboundAggregateExpr *>(expression.get());
         Expression* child = nullptr;
+        bool has_agg = false;
         if(unbound_agg_expr->child().get()->type() == ExprType::UNBOUND_FIELD){
           auto child_expr = static_cast<UnboundFieldExpr* >(unbound_agg_expr->child().get());
           const char* query_field_name = child_expr->field_name(); //拿个名字
@@ -787,11 +788,23 @@ RC SelectStmt::get_query_expressions(View *view, std::vector<unique_ptr<Expressi
         }
         else if(unbound_agg_expr->child().get()->type() == ExprType::STAR){
           child = new StarExpr();
+          for(int i = 0; i < view_meta.field_num(); i++){
+            const ViewFieldMeta *view_field_meta = view_meta.field(i);
+            if(view_field_meta->type() == ExprType::AGGREGATION){
+              Value value;
+              value.set_null();
+              child = new ValueExpr(value);
+              has_agg = true;
+              break;
+            }
+          }
         }
-        else if(unbound_agg_expr->child().get()->type() == ExprType::ARITHMETIC){
-        }
+        
         UnboundAggregateExpr* expr = new UnboundAggregateExpr(unbound_agg_expr->aggregate_name(), child);
         expr->set_name(unbound_agg_expr->name());
+        if(has_agg){
+          expr->set_flag();
+        }
         query_expressions.emplace_back(expr);
       }
     }

@@ -518,11 +518,15 @@ public:
   void set_expr(const char * expr) { expr_ = expr; }
   const char * expr() { return expr_.c_str(); }
 
+  void set_flag() { flag_ = true; }
+  bool flag() {return flag_; }
+
 private:
   std::string                 aggregate_name_;
   std::unique_ptr<Expression> child_;
   std::string                 expr_;
   std::unique_ptr<Expression> copy_child_;
+  bool                        flag_ = false;
 };
 
 class AggregateExpr : public Expression
@@ -566,11 +570,15 @@ public:
 public:
   static RC type_from_string(const char *type_str, Type &type);
   static RC string_from_type(std::string &str, const Type type);
+  void set_count1(){
+    count1_ = true;
+  }
 
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
   std::string                 expr_;
+  bool                        count1_ = false;
 };
 
 
